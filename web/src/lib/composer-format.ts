@@ -68,10 +68,38 @@ export function continueList(text: string, caret: number): Edit | null {
 
 /** Backspace right after a known @mention removes the whole mention. */
 export function deleteMention(text: string, caret: number, known: Set<string>): Edit | null {
-  const m = /(^|\s)@([\w./-]+)$/.exec(text.slice(0, caret));
+  const head = text.slice(0, caret);
+  // Names with spaces (a picked file or article) first, longest first.
+  for (const name of [...known].filter((n) => /[^\w./-]/.test(n)).sort((a, b) => b.length - a.length)) {
+    const s = head.length - name.length - 1;
+    if (s >= 0 && head.endsWith(`@${name}`) && (s === 0 || /\s/.test(head[s - 1]))) return { text: text.slice(0, s) + text.slice(caret), start: s, end: s };
+  }
+  const m = /(^|\s)@([\w./-]+)$/.exec(head);
   if (!m || !known.has(m[2])) return null;
   const s = caret - m[2].length - 1;
   return { text: text.slice(0, s) + text.slice(caret), start: s, end: s };
+}
+
+/** The known name an "@" at `at` starts, if any: names with spaces (longest first), then a plain word. */
+function knownAt(rest: string, at: number, known: Set<string>, spaced: string[]) {
+  for (const n of spaced) if (rest.startsWith(n, at + 1) && !/\w/.test(rest[at + 1 + n.length] ?? "")) return n;
+  let name = /^[\w./-]+/.exec(rest.slice(at + 1))?.[0] ?? "";
+  // A sentence's full stop after a mention isn't part of it.
+  while (name && !known.has(name) && /[./-]$/.test(name)) name = name.slice(0, -1);
+  return name && known.has(name) ? name : null;
+}
+
+/**
+ * A picked item's link goes back in on send: each "@Label" the suite picker put in
+ * becomes [@Label](link), the form the AI reads the item from. Longest labels first.
+ */
+export function expandRefs(text: string, links: Record<string, string>) {
+  let out = text;
+  for (const label of Object.keys(links).sort((a, b) => b.length - a.length)) {
+    const esc = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    out = out.replace(new RegExp(`(^|\\s)@${esc}(?!\\w)`, "g"), (_m, pre: string) => `${pre}[@${label}](${links[label]})`);
+  }
+  return out;
 }
 
 export type Segment = { text: string; kind: "text" | "mention" | "command" };
@@ -85,18 +113,15 @@ export function segments(text: string, known: Set<string>, commands: Set<string>
     out.push({ text: cmd, kind: "command" });
     rest = text.slice(cmd.length);
   }
-  const re = /(^|\s)@([\w./-]+)/g;
+  const spaced = [...known].filter((n) => /[^\w./-]/.test(n)).sort((a, b) => b.length - a.length);
   let last = 0;
-  for (let m = re.exec(rest); m; m = re.exec(rest)) {
-    let name = m[2];
-    // A sentence's full stop after a mention isn't part of it.
-    while (name && !known.has(name) && /[./-]$/.test(name)) name = name.slice(0, -1);
-    if (!known.has(name)) continue;
-    const at = m.index + m[1].length;
+  for (let at = rest.indexOf("@"); at >= 0; at = rest.indexOf("@", at + 1)) {
+    if (at < last || (at > 0 && !/\s/.test(rest[at - 1]))) continue;
+    const name = knownAt(rest, at, known, spaced);
+    if (!name) continue;
     if (at > last) out.push({ text: rest.slice(last, at), kind: "text" });
     out.push({ text: `@${name}`, kind: "mention" });
     last = at + name.length + 1;
-    re.lastIndex = last;
   }
   if (last < rest.length) out.push({ text: rest.slice(last), kind: "text" });
   return out;

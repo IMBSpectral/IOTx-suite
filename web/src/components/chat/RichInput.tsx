@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useImperativeHandle, useLayoutEffect, useMemo, useRef, type KeyboardEvent, type TextareaHTMLAttributes } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, type KeyboardEvent, type TextareaHTMLAttributes } from "react";
 import { Bold, Code, Italic, List, ListOrdered, SquareCode } from "lucide-react";
 import { codeBlock, continueList, deleteMention, list, segments, wrap, type Edit } from "@/lib/composer-format";
 
@@ -13,6 +13,8 @@ type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "value" | "onChan
   /** When a suggestion menu is open, Enter/Tab belong to it, not to list continuation. */
   menuOpen?: boolean;
   maxRows?: number;
+  /** The suite's @ picker put in an item as "@Label": its link, kept until send. */
+  onRef?: (label: string, url: string) => void;
 };
 
 /**
@@ -21,7 +23,7 @@ type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "value" | "onChan
  * behind it, a formatting bar with shortcuts, list continuation and growth
  * with its content.
  */
-const RichInput = forwardRef<HTMLTextAreaElement, Props>(function RichInput({ value, onValue, mentions, commands, menuOpen, maxRows = 10, onKeyDown, className, ...rest }, ref) {
+const RichInput = forwardRef<HTMLTextAreaElement, Props>(function RichInput({ value, onValue, mentions, commands, menuOpen, maxRows = 10, onRef, onKeyDown, className, ...rest }, ref) {
   const box = useRef<HTMLTextAreaElement>(null);
   const layer = useRef<HTMLDivElement>(null);
   useImperativeHandle(ref, () => box.current!);
@@ -29,6 +31,20 @@ const RichInput = forwardRef<HTMLTextAreaElement, Props>(function RichInput({ va
   const cmds = useMemo(() => new Set(commands), [commands]);
   const parts = useMemo(() => segments(value, known, cmds), [value, known, cmds]);
   const hasChips = parts.some((p) => p.kind !== "text");
+
+  // The suite's @ picker inserts items here as "@Label" (drawn as a chip) and hands over the link separately.
+  const refCb = useRef(onRef);
+  refCb.current = onRef;
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ label?: string; url?: string }>).detail;
+      if (d?.label && d.url) refCb.current?.(d.label, d.url);
+    };
+    el.addEventListener("iotx-ref", on);
+    return () => el.removeEventListener("iotx-ref", on);
+  }, []);
 
   // Grow with the text, up to maxRows, then scroll.
   useLayoutEffect(() => {
@@ -131,6 +147,7 @@ const RichInput = forwardRef<HTMLTextAreaElement, Props>(function RichInput({ va
             if (layer.current) layer.current.scrollTop = e.currentTarget.scrollTop;
           }}
           className={`relative ${className ?? ""}`}
+          data-iotx-refs={onRef ? "inline" : undefined}
           {...rest}
         />
       </div>

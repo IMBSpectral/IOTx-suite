@@ -86,7 +86,13 @@ function insert(win: Win, el: Field, ref: Ref, host: string) {
   if (ref.kind === "local") text = `${ref.insert} `;
   else if (ref.kind === "person") text = isRecipient(el) && ref.email ? `${ref.email}, ` : `@${ref.label} `;
   else if (chatHere && ref.label.startsWith("#")) text = `${ref.label} `;
-  else {
+  else if (isPlain(el) && el.dataset.iotxRefs === "inline" && ref.url) {
+    // A box that draws chips (the Builder's): just "@Label" goes in; the link is handed over
+    // separately and added back when the message is sent.
+    const label = ref.label.replace(/[[\]\n]/g, " ").replace(/\s+/g, " ").trim();
+    el.dispatchEvent(new W.CustomEvent("iotx-ref", { detail: { label, url: ref.url } }));
+    text = `@${label} `;
+  } else {
     // The AI boxes and the Builder read short in-suite links; Chat, Tasks, Mail and Docs need the full address to make a link.
     const short = host === "" || /^\/(home\/chat|projects\/)/.test(host);
     const href = ref.url?.startsWith("/") && !short ? origin + ref.url : (ref.url ?? "");

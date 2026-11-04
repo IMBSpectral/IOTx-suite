@@ -20,6 +20,11 @@ function UserText({ text }: { text: string }) {
             <span data-chip="mention" className="rounded px-1 font-medium" style={{ background: "color-mix(in srgb, var(--accent) 16%, transparent)" }}>
               {children}
             </span>
+          ) : /^\[?@/.test(String(Array.isArray(children) ? children[0] : children ?? "")) ? (
+            // A suite item picked with @ (an article, a sheet, a task…): a chip that opens it.
+            <a href={href} target="_blank" rel="noreferrer" data-chip="ref" className="rounded px-1 font-medium no-underline hover:underline" style={{ background: "color-mix(in srgb, var(--accent) 16%, transparent)" }}>
+              {children}
+            </a>
           ) : (
             <a href={href} target="_blank" rel="noreferrer" className="underline">
               {children}

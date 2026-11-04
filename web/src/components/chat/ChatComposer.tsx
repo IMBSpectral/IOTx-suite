@@ -3,6 +3,7 @@
 import Coachmark from "../Coachmark";
 import DictateButton from "./DictateButton";
 import RichInput from "./RichInput";
+import { expandRefs } from "@/lib/composer-format";
 import AnnotateDialog from "./AnnotateDialog";
 import ConnectorsPanel from "../ConnectorsPanel";
 import { detectPastedCredential } from "@/lib/connector-patterns";
@@ -145,6 +146,8 @@ export default function ChatComposer({
 }) {
   const brand = useBrand();
   const [input, setInput] = useState("");
+  // Items picked with the suite's @ (an article, a sheet, a task…): label -> link, added back on send.
+  const [links, setLinks] = useState<Record<string, string>>({});
   // IOTx Suite 2-in-1: Ask is for everyone; Plan, Build, Design and Goal appear with the Builder switch.
   const perms = usePerms();
   const modeAllowed = (m: Mode) => (m === "ask" ? perms.can("home.ask") : m === "plan" ? perms.builder && perms.can("builder.plan") : perms.builder && perms.can("builder.build"));
@@ -417,8 +420,9 @@ export default function ChatComposer({
       return;
     }
     setGuard(null);
-    onSend(input.trim() || "See the attached files.", ready.map(({ id, name, type, size }) => ({ id, name, type, size })));
+    onSend(expandRefs(input.trim(), links) || "See the attached files.", ready.map(({ id, name, type, size }) => ({ id, name, type, size })));
     setInput("");
+    setLinks({});
     setPending([]);
   }
 
@@ -634,7 +638,8 @@ export default function ChatComposer({
             setInput(v);
             setHighlight(0);
           }}
-          mentions={[...connectors, ...projects, ...collections, ...files]}
+          mentions={[...connectors, ...projects, ...collections, ...files, ...Object.keys(links)]}
+          onRef={(label, url) => setLinks((l) => ({ ...l, [label]: url }))}
           commands={commands.map((c) => c.cmd)}
           menuOpen={menuItems.length > 0}
           onPaste={onPaste}
