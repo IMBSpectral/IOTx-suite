@@ -1,5 +1,4 @@
 import NextAuth from "next-auth";
-import Google from "next-auth/providers/google";
 import GitHub from "next-auth/providers/github";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { cookies } from "next/headers";
@@ -15,7 +14,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "database" },
   pages: { signIn: "/login", verifyRequest: "/login/check-email" },
   providers: [
-    Google({ allowDangerousEmailAccountLinking: true }),
     // GitHub sign-in only once its OAuth app is configured.
     ...(process.env.AUTH_GITHUB_ID ? [GitHub({ allowDangerousEmailAccountLinking: true })] : []),
     // Sign in with an emailed link, for people without Google (needs a way to send email).

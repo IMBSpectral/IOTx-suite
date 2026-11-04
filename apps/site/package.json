@@ -1,0 +1,23 @@
+{
+  "name": "iotx-site",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The public website (launch / intro page) for IOTx Suite. The suite itself starts at its sign-in page.",
+  "scripts": {
+    "dev": "next dev -p 3200",
+    "build": "next build",
+    "start": "next start -p 3200",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "next": "16.4.2",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5"
+  }
+}
