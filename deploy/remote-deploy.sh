@@ -16,14 +16,15 @@ SVC=$([ "$APP" = web ] && echo iotx || echo iotx-workspace)
 PORT=$([ "$APP" = web ] && echo 3000 || echo 3100)
 TS=$(date +%Y%m%d-%H%M%S)
 
+mkdir -p "$DIR"
 tar --exclude=node_modules --exclude=.next --exclude=storage -czf "/opt/iotx/backup-$APP-$TS.tgz" -C "$DIR" .
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
 tar -xzf "/opt/iotx/$APP-new.tgz" -C "$STAGE"
 rm -rf "$STAGE/.env.local" "$STAGE/.git" "$STAGE/.playwright-mcp"
-cp -a "$DIR"/.env "$STAGE"/
-# Reuse the installed packages so npm ci only fetches what changed.
-cp -a "$DIR/node_modules" "$STAGE/node_modules"
+cp -a "$DIR"/.env "$STAGE"/ 2>/dev/null || { echo "No $DIR/.env: run provision-instance.sh first"; exit 1; }
+# Reuse the installed packages so npm ci only fetches what changed (none yet on a first install).
+if [ -d "$DIR/node_modules" ]; then cp -a "$DIR/node_modules" "$STAGE/node_modules"; fi
 cd "$STAGE"
 npm ci --no-audit --no-fund --loglevel=error
 npx prisma db push 2>&1 | tail -3
