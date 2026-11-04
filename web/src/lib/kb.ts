@@ -5,6 +5,7 @@ import { db } from "./db";
 import { effective, type Effective } from "./iotx/permissions";
 import { charge, creditsForUsage } from "./credits";
 import { meteredFetch } from "./ai-meter";
+import { xlsxText } from "./uploads";
 
 /**
  * The company knowledge base (the suite's "Read" app). Articles (SOPs,
@@ -92,18 +93,20 @@ const htmlText = (s: string) =>
       .replace(/&nbsp;/g, " "),
   ).replace(/\n{3,}/g, "\n\n").trim();
 
-/** Markdown text of an uploaded file: PDF, Word, Markdown, text, CSV or HTML. */
+/** Markdown text of an uploaded file: PDF, Word, Excel, Markdown, text, CSV or HTML. */
 export async function extractText(name: string, type: string, buf: Buffer) {
   const ext = name.toLowerCase().split(".").pop() ?? "";
   let text: string;
   if (ext === "pdf" || type === "application/pdf") text = await pdfText(buf).catch(() => { throw new KbError("That PDF couldn't be read. If it's a scan, it has no text to read."); });
   else if (ext === "docx" || type.includes("wordprocessingml")) text = await docxText(buf).catch((e) => { throw e instanceof KbError ? e : new KbError("That Word file couldn't be read. Save it as .docx and try again."); });
+  else if (ext === "xlsx" || ext === "xlsm" || type.includes("spreadsheetml")) text = await xlsxText(buf, 5000).catch(() => { throw new KbError("That Excel file couldn't be read. Save it as .xlsx and try again."); });
+  else if (ext === "xls") throw new KbError("That's the old Excel format (.xls). Save it as .xlsx and upload it again.");
   else if (["md", "markdown", "txt", "text", "csv", "tsv", "json"].includes(ext) || type.startsWith("text/")) {
     text = buf.toString("utf8");
     if (ext === "html" || ext === "htm" || type === "text/html") text = htmlText(text);
     else if (ext === "csv" || ext === "tsv") text = "```\n" + text.trim() + "\n```";
   } else if (ext === "html" || ext === "htm") text = htmlText(buf.toString("utf8"));
-  else throw new KbError("Upload a PDF, Word (.docx), Markdown, text, CSV or HTML file.");
+  else throw new KbError("Upload a PDF, Word (.docx), Excel (.xlsx), Markdown, text, CSV or HTML file.");
   text = text.replace(/\r\n/g, "\n").replace(/\u0000/g, "").trim();
   if (!text) throw new KbError("No text was found in that file.");
   return text.slice(0, MAX_BODY);
@@ -537,7 +540,7 @@ export async function syncSource(id: string) {
       try {
         const c = await g.driveContent(s.userId, f);
         const body = await extractText(c.name, c.type, c.data);
-        const title = f.name.replace(/\.(pdf|docx|md|markdown|txt|csv|tsv|html?)$/i, "").slice(0, 200) || "Untitled";
+        const title = f.name.replace(/\.(pdf|docx|xlsx|xlsm|xls|md|markdown|txt|csv|tsv|html?)$/i, "").slice(0, 200) || "Untitled";
         if (have) {
           await db.$transaction(async (tx) => {
             if (have.body !== body || have.title !== title) await tx.kbVersion.create({ data: { docId: have.id, version: have.version, title: have.title, body: have.body, editedBy: s.userId, note: "Changed in Drive" } });

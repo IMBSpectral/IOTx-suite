@@ -172,7 +172,7 @@ export default function KnowledgeApp({ initialDoc, initialTab }: { initialDoc: s
               ) : docs === null ? <p className="kb-muted">Loading…</p> : docs.length === 0 ? (
                 <div className="kb-empty">
                   <h3>{kind || tag || staleOnly ? "Nothing here" : "Start your company's knowledge base"}</h3>
-                  {!(kind || tag || staleOnly) && <p className="kb-muted">Upload your SOPs, policies, price lists and product sheets (PDF, Word, Markdown, text or CSV), or write them here. The Builder, AI Chat and every app will use them, with sources.</p>}
+                  {!(kind || tag || staleOnly) && <p className="kb-muted">Upload your SOPs, policies, price lists and product sheets (PDF, Word, Excel, Markdown, text or CSV), or write them here. The Builder, AI Chat and every app will use them, with sources.</p>}
                   {meta.me.canPublish && !(kind || tag || staleOnly) && <div className="kb-row"><button className="ix-btn primary" onClick={() => newDoc()}><Plus size={14} /> Write the first article</button></div>}
                 </div>
               ) : docs.map((d) => (
@@ -211,7 +211,7 @@ function UploadButton({ onDone }: { onDone: (ids: string[], failed: { name: stri
   return (
     <>
       <button className="ix-btn" onClick={() => ref.current?.click()} disabled={busy}><FileUp size={14} /> {busy ? "Reading…" : "Upload"}</button>
-      <input ref={ref} type="file" multiple hidden accept=".pdf,.docx,.md,.markdown,.txt,.csv,.tsv,.html,.htm,.json" onChange={(e) => { if (e.target.files?.length) go(e.target.files); e.target.value = ""; }} />
+      <input ref={ref} type="file" multiple hidden accept=".pdf,.docx,.xlsx,.xlsm,.xls,.md,.markdown,.txt,.csv,.tsv,.html,.htm,.json" onChange={(e) => { if (e.target.files?.length) go(e.target.files); e.target.value = ""; }} />
     </>
   );
 }

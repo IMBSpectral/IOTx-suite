@@ -139,7 +139,7 @@ async function docxText(bytes: Buffer) {
 }
 
 /** Excel: every sheet as tab-separated rows (values as shown in the cells' stored form). */
-async function xlsxText(bytes: Buffer) {
+export async function xlsxText(bytes: Buffer, maxRows = 400) {
   const JSZip = (await import("jszip")).default;
   const zip = await JSZip.loadAsync(bytes);
   const shared = [...((await zip.file("xl/sharedStrings.xml")?.async("string")) ?? "").matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) =>
@@ -165,7 +165,7 @@ async function xlsxText(bytes: Buffer) {
         cells[col(c[1])] = val.replace(/\s+/g, " ").trim();
       }
       if (cells.some(Boolean)) rows.push(Array.from(cells, (x) => x ?? "").join("\t"));
-      if (rows.length >= 400) break;
+      if (rows.length >= maxRows) break;
     }
     if (rows.length) out.push(`## Sheet: ${xmlText(m[1])}\n${rows.join("\n")}`);
   }
