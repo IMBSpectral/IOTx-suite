@@ -487,11 +487,14 @@ async function runBuild(buildId: string) {
     }
 
     const durationMs = Date.now() - startedAt;
+    // The reply as saved. It also rides on "done": the live text deltas aren't replayed, so a
+    // page that started listening late (a fast Ask reply) would otherwise show nothing until reload.
+    const finalContent = outOfCredits ? text : stopped ? `${text}\n\n*Stopped.*`.trim() : text;
     await db.$transaction([
       db.message.update({
         where: { id: build.messageId },
         data: {
-          content: outOfCredits ? text : stopped ? `${text}\n\n*Stopped.*`.trim() : text,
+          content: finalContent,
           steps: outOfCredits ? [...steps, "paused:credits"] : steps,
         },
       }),
@@ -522,6 +525,7 @@ async function runBuild(buildId: string) {
       files: touched,
       verified,
       stopped,
+      content: finalContent,
     } as never);
 
     // Goal runs keep going on their own while the task list has work left.

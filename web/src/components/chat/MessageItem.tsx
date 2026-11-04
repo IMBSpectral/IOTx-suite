@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { useBrand } from "@/components/BrandProvider";
 import type { Brand } from "@/lib/brand-shared";
 import ReactMarkdown from "react-markdown";
@@ -9,7 +9,8 @@ import { defaultUrlTransform } from "react-markdown";
 import { linkMentions } from "@/lib/composer-format";
 
 /** What the person sent: their Markdown formatting, line breaks as typed, @mentions as chips. */
-function UserText({ text }: { text: string }) {
+const UserText = memo(function UserText({ text }: { text: string }) {
+  const md = useMemo(() => linkMentions(text), [text]);
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -32,10 +33,10 @@ function UserText({ text }: { text: string }) {
           ),
       }}
     >
-      {linkMentions(text)}
+      {md}
     </ReactMarkdown>
   );
-}
+});
 import {
   ArrowDown,
   ArrowUp,
@@ -246,7 +247,7 @@ export type MessageActions = {
   onEditQueued: (buildId: string, content: string) => void;
 };
 
-export default function MessageItem({
+function MessageItem({
   msg,
   projectId,
   stage,
@@ -621,3 +622,17 @@ export default function MessageItem({
     </div>
   );
 }
+
+/**
+ * Redrawn only when its own props change. While a build streams, the running reply
+ * updates many times a second; the rest of the chat (often long prompts and replies)
+ * stays as it is. The plan info is rebuilt on every render, so it is compared by value.
+ */
+export default memo(MessageItem, (a, b) => {
+  for (const k of Object.keys({ ...a, ...b }) as (keyof typeof a)[]) {
+    if (k === "plan") {
+      if (a.plan?.version !== b.plan?.version || a.plan?.previous !== b.plan?.previous) return false;
+    } else if (a[k] !== b[k]) return false;
+  }
+  return true;
+});

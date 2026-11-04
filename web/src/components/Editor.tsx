@@ -301,7 +301,56 @@ export default function Editor({
   const liveRef = useRef<(LiveFile & { msgId: string }) | null>(null);
   const putLive = useCallback((v: (LiveFile & { msgId: string }) | null) => {
     liveRef.current = v;
+    liveDirty.current = false;
     setLiveCode(v);
+  }, []);
+  // A build streams many small events a second (reasoning words, reply words, code as it is
+  // written). Repainting the whole editor for each one froze the page on long chats, so these
+  // three are collected and painted at most every 100 ms. Any other event paints them first,
+  // so the order on screen stays the order they arrived in.
+  // Message buttons call the latest handlers through this, so messages that didn't change can skip redrawing.
+  const actionsRef = useRef<MessageActions | null>(null);
+  const [stableActions] = useState<MessageActions>(() => ({
+    onOpenPath: (...a) => actionsRef.current?.onOpenPath(...a),
+    onFeedback: (...a) => actionsRef.current?.onFeedback(...a),
+    onUndo: (...a) => actionsRef.current?.onUndo(...a),
+    onBookmark: (...a) => actionsRef.current?.onBookmark(...a),
+    onRerun: (...a) => actionsRef.current?.onRerun(...a),
+    onAnswer: (...a) => actionsRef.current?.onAnswer(...a),
+    onApprovePlan: (...a) => actionsRef.current?.onApprovePlan(...a),
+    onRevisePlan: () => actionsRef.current?.onRevisePlan?.(),
+    onSwitchToBuild: (...a) => actionsRef.current?.onSwitchToBuild(...a),
+    onRunNow: (...a) => actionsRef.current?.onRunNow(...a),
+    onRemove: (...a) => actionsRef.current?.onRemove(...a),
+    onMove: (...a) => actionsRef.current?.onMove?.(...a),
+    onEditQueued: (...a) => actionsRef.current?.onEditQueued(...a),
+  }));
+  const liveDirty = useRef(false);
+  const pendingThought = useRef<string | null>(null);
+  const pendingReply = useRef<{ id: string; text: string } | null>(null);
+  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushStream = useCallback(() => {
+    if (flushTimer.current) {
+      clearTimeout(flushTimer.current);
+      flushTimer.current = null;
+    }
+    const t = pendingReply.current;
+    pendingReply.current = null;
+    if (t) setMessages((all) => all.map((m) => (m.id === t.id ? { ...m, status: "running", content: m.content + t.text } : m)));
+    if (pendingThought.current !== null) {
+      setStage(pendingThought.current);
+      pendingThought.current = null;
+    }
+    if (liveDirty.current) {
+      liveDirty.current = false;
+      setLiveCode(liveRef.current);
+    }
+  }, []);
+  const soon = useCallback(() => {
+    if (!flushTimer.current) flushTimer.current = setTimeout(flushStream, 100);
+  }, [flushStream]);
+  useEffect(() => () => {
+    if (flushTimer.current) clearTimeout(flushTimer.current);
   }, []);
   const codeViewRef = useRef(false);
   useEffect(() => {
@@ -671,6 +720,7 @@ export default function Editor({
             if (seen.has(ev.seq)) continue;
             seen.add(ev.seq);
           }
+          if (ev.type !== "thought" && ev.type !== "text" && ev.type !== "file_stream") flushStream();
           if (ev.type === "closed") {
             // The stream ended without a live "done" (the turn finished before
             // we attached): take the final state from the server.
@@ -702,29 +752,36 @@ export default function Editor({
             // The agent's reasoning as it streams: show its latest line.
             thoughtRef.current = (thoughtRef.current + ev.delta).slice(-2000);
             const line = thoughtRef.current.trim().split(/\n+/).pop()?.replace(/[*#`_]/g, "").trim();
-            if (line) setStage(`Thinking: ${line.length > 160 ? "…" + line.slice(-160) : line}`);
+            if (line) {
+              pendingThought.current = `Thinking: ${line.length > 160 ? "…" + line.slice(-160) : line}`;
+              soon();
+            }
           } else if (ev.type === "activity") {
             thoughtRef.current = "";
             setStage(activityLabel(ev.tool));
           } else if (ev.type === "file_stream") {
-            if (ev.start) setStage(`Writing ${ev.path}`);
-            // A file's code as the agent writes it.
+            // A file's code as the agent writes it: a new file shows at once, its growth every 100 ms.
             const c = liveRef.current;
-            putLive(
-              !ev.start && c && c.msgId === msgId && c.path === ev.path && !c.done
-                ? { ...c, content: c.content + ev.delta }
-                : { msgId, path: ev.path, content: ev.delta, done: false },
-            );
+            if (!ev.start && c && c.msgId === msgId && c.path === ev.path && !c.done) {
+              liveRef.current = { ...c, content: c.content + ev.delta };
+              liveDirty.current = true;
+              soon();
+            } else {
+              flushStream();
+              pendingThought.current = null;
+              if (ev.start) setStage(`Writing ${ev.path}`);
+              putLive({ msgId, path: ev.path, content: ev.delta, done: false });
+            }
           } else if (ev.type === "text") {
             if (thoughtRef.current) {
               thoughtRef.current = "";
+              pendingThought.current = null;
               setStage("Writing the reply…");
             }
-            patchMsg(msgId, (m) => ({
-              ...m,
-              status: "running",
-              content: m.content + ev.delta,
-            }));
+            const t = pendingReply.current;
+            if (t && t.id !== msgId) flushStream();
+            pendingReply.current = { id: msgId, text: (pendingReply.current?.text ?? "") + ev.delta };
+            soon();
           } else if (ev.type === "file") {
             if (firstBuild.current.on) ++firstBuild.current.files;
             setStage(`${ev.op === "delete" ? "Deleted" : "Saved"} ${ev.path}`);
@@ -790,7 +847,13 @@ export default function Editor({
               credits: ev.credits,
               durationMs: ev.durationMs,
               sha: ev.sha ?? null,
-              content: ev.stopped && m.content ? `${m.content}\n\n*Stopped.*` : m.content,
+              // The saved reply when the server sends it (it may have finished before we were listening).
+              content:
+                typeof ev.content === "string" && ev.content.trim()
+                  ? ev.content
+                  : ev.stopped && m.content
+                    ? `${m.content}\n\n*Stopped.*`
+                    : m.content,
             }));
             setStage(null);
             putLive(null);
@@ -810,7 +873,7 @@ export default function Editor({
         }
       }
     },
-    [patchMsg, refreshFiles, notify, name, projectId, brand.shortName, putLive],
+    [patchMsg, refreshFiles, notify, name, projectId, brand.shortName, putLive, flushStream, soon],
   );
 
   // Follow turns one at a time, in order. Browsers cap open connections per
@@ -834,10 +897,11 @@ export default function Editor({
       )
       .finally(() => {
         followingRef.current = null;
+        flushStream();
         setStage(null);
         setFollowTick((t) => t + 1);
       });
-  }, [messages, followTick, follow, patchMsg]);
+  }, [messages, followTick, follow, patchMsg, flushStream]);
 
   // A prompt typed on the dashboard starts the first build on arrival.
   useEffect(() => {
@@ -1096,6 +1160,7 @@ export default function Editor({
       });
     },
   };
+  actionsRef.current = actions;
 
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
   const firstAssistant = messages.find((m) => m.role === "assistant");
@@ -1405,7 +1470,7 @@ export default function Editor({
                 queuedBuildId={
                   m.role === "user" && next?.role === "assistant" && next.status === "queued" ? next.buildId : undefined
                 }
-                actions={actions}
+                actions={stableActions}
               />
             );
           })}
