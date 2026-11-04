@@ -1,0 +1,552 @@
+<title>IOTx Suite</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a reading column for the plan, then a wide "contact sheet" album of product screens, chapter by chapter. */
+:root {
+  --bg: #f3f5f7; --surface: #ffffff; --ink: #14202b; --muted: #5a6875; --line: #d8dee5;
+  --accent: #d9641e; --accent-soft: #fbe9dd; --steel: #2f4a63; --good: #1f7a4d; --warn: #a15c07;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  /* The product itself: a fixed light look inside each mock-up, in either page theme. */
+  --p-bg: #f6f7f9; --p-surface: #ffffff; --p-ink: #1b2733; --p-muted: #6b7885; --p-line: #e2e6eb; --p-accent: #d9641e; --p-steel: #2f4a63; --p-soft: #eef2f6;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #0f151b; --surface: #17202a; --ink: #e6ebf0; --muted: #9aa7b3; --line: #2a3643; --accent: #f08a46; --accent-soft: #3a2416; --steel: #9fb8cf; --good: #57c08b; --warn: #e3a54a; color-scheme: dark; } }
+:root[data-theme="dark"] { --bg: #0f151b; --surface: #17202a; --ink: #e6ebf0; --muted: #9aa7b3; --line: #2a3643; --accent: #f08a46; --accent-soft: #3a2416; --steel: #9fb8cf; --good: #57c08b; --warn: #e3a54a; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 16px/1.6 var(--body); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 48px 96px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.col { max-width: 720px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.2rem, 5vw, 3.4rem); line-height: 1.05; margin: 8px 0 16px; font-weight: 800; }
+h2 { font-size: 1.75rem; margin: 64px 0 12px; font-weight: 800; }
+h3 { font-size: 1.15rem; margin: 28px 0 8px; font-weight: 700; }
+p { margin: 0 0 14px; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+.lede { font-size: 1.15rem; color: var(--muted); }
+.muted { color: var(--muted); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 28px 0 0; }
+nav.toc a { font: 500 13px var(--body); color: var(--ink); text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; background: var(--surface); }
+nav.toc a:hover, nav.toc a:focus-visible { border-color: var(--accent); outline: none; }
+
+.verdict { display: grid; grid-template-columns: auto 1fr; gap: 16px 20px; align-items: start; background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 10px; padding: 20px; margin: 20px 0; }
+.verdict .tag { font: 800 13px var(--display); letter-spacing: .08em; text-transform: uppercase; background: var(--accent); color: #fff; border-radius: 6px; padding: 6px 10px; }
+.verdict p { margin: 0; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 16px 0; }
+.box { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+.box h3 { margin-top: 0; }
+.box ul, .col ul { padding-left: 20px; margin: 0; }
+.box li, .col li { margin: 4px 0; }
+.compare { overflow-x: auto; margin: 16px 0; }
+table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 14px; background: var(--surface); }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 12px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+td.yes { color: var(--good); font-weight: 600; } td.part { color: var(--warn); font-weight: 600; } td.no { color: var(--muted); }
+.path { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 16px 0; }
+.path .step { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+.path .when { font: 500 12px var(--mono); color: var(--accent); text-transform: uppercase; letter-spacing: .08em; }
+.path .step b { display: block; font-family: var(--display); margin: 4px 0; }
+.roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 16px 0; }
+.role { border-top: 3px solid var(--steel); background: var(--surface); padding: 14px; border-radius: 0 0 10px 10px; }
+.role b { font-family: var(--display); }
+
+/* Album */
+.chapter { margin-top: 72px; }
+.chapter > p { max-width: 720px; }
+.shot { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 24px; align-items: start; margin: 28px 0 40px; }
+@media (max-width: 860px) { .shot { grid-template-columns: 1fr; } }
+.shot .scroll { overflow-x: auto; border-radius: 12px; }
+.cap { min-width: 0; }
+.cap .num { font: 500 12px var(--mono); color: var(--accent); letter-spacing: .08em; }
+.cap h3 { margin: 4px 0 8px; font-size: 1.25rem; }
+.cap dl { margin: 0; display: grid; gap: 10px; font-size: 14.5px; }
+.cap dt { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.cap dd { margin: 2px 0 0; }
+
+/* The product mock-ups (fixed product look) */
+.frame { min-width: 700px; background: var(--p-bg); color: var(--p-ink); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; font: 12px/1.45 var(--body); box-shadow: 0 10px 30px rgba(15, 25, 35, .12); }
+.chrome { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #e9edf1; border-bottom: 1px solid var(--p-line); }
+.chrome i { width: 9px; height: 9px; border-radius: 50%; background: #c8ced5; display: inline-block; }
+.chrome .url { flex: 1; background: #fff; border-radius: 6px; padding: 3px 10px; font: 11px var(--mono); color: #55616d; margin-left: 8px; }
+.app { display: grid; grid-template-columns: 54px 1fr; min-height: 380px; }
+.rail { background: #1b2733; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 10px 0; }
+.rail .logo { width: 30px; height: 30px; border-radius: 8px; background: var(--p-accent); color: #fff; font: 800 11px var(--display); display: grid; place-items: center; margin-bottom: 6px; }
+.rail span { width: 34px; height: 22px; border-radius: 6px; color: #9fb0c0; font: 600 8.5px var(--body); display: grid; place-items: center; }
+.rail span.on { background: #34475a; color: #fff; }
+.rail .gap { flex: 1; }
+.main { padding: 14px 16px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.top { display: flex; align-items: center; gap: 10px; }
+.top .title { font: 700 14px var(--display); }
+.top .sp { flex: 1; }
+.pill { display: inline-block; border-radius: 999px; padding: 2px 8px; font-size: 10.5px; background: var(--p-soft); color: var(--p-steel); white-space: nowrap; }
+.pill.o { background: #fbe9dd; color: #a8470e; } .pill.g { background: #e1f3e9; color: #1f7a4d; } .pill.r { background: #fde4e1; color: #b3261e; }
+.btn { display: inline-block; border-radius: 7px; padding: 5px 10px; font-weight: 600; font-size: 11px; background: var(--p-accent); color: #fff; white-space: nowrap; }
+.btn.ghost { background: #fff; color: var(--p-ink); border: 1px solid var(--p-line); }
+.card { background: var(--p-surface); border: 1px solid var(--p-line); border-radius: 9px; padding: 10px; min-width: 0; }
+.g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } .g3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; } .g4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.sm { font-size: 10.5px; color: var(--p-muted); }
+.b { font-weight: 600; }
+.input { background: #fff; border: 1px solid var(--p-line); border-radius: 10px; padding: 10px 12px; color: var(--p-muted); }
+.big-input { border: 1.5px solid var(--p-accent); border-radius: 14px; padding: 14px; background: #fff; color: var(--p-ink); font-size: 13px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--p-line); background: #fff; border-radius: 999px; padding: 4px 10px; font-size: 11px; }
+.msg { border-radius: 10px; padding: 8px 10px; max-width: 85%; }
+.msg.me { background: #1b2733; color: #fff; align-self: flex-end; }
+.msg.ai { background: #fff; border: 1px solid var(--p-line); }
+.tile { background: #fff; border: 1px solid var(--p-line); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.ic { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; color: #fff; font: 700 9px var(--display); }
+.bar { height: 6px; border-radius: 3px; background: var(--p-soft); overflow: hidden; } .bar > b { display: block; height: 100%; background: var(--p-accent); }
+.tbl { width: 100%; border-collapse: collapse; font-size: 10.5px; min-width: 0; background: #fff; }
+.tbl th, .tbl td { border-bottom: 1px solid var(--p-line); padding: 5px 6px; text-align: left; font-family: var(--body); text-transform: none; letter-spacing: 0; color: var(--p-ink); }
+.tbl th { color: var(--p-muted); font-weight: 600; background: #f9fafb; }
+.sheet td, .sheet th { border: 1px solid var(--p-line); }
+.split { display: grid; grid-template-columns: 1fr 1.25fr; gap: 10px; flex: 1; }
+.chartbars { display: flex; align-items: flex-end; gap: 6px; height: 70px; }
+.chartbars i { flex: 1; background: var(--p-steel); border-radius: 3px 3px 0 0; display: block; }
+.chartbars i.a { background: var(--p-accent); }
+.kanban { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.kanban .colk { background: #eef1f4; border-radius: 9px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.kanban .t { background: #fff; border: 1px solid var(--p-line); border-radius: 7px; padding: 6px; font-size: 10.5px; }
+.cal { display: grid; grid-template-columns: 40px repeat(5, 1fr); font-size: 10px; }
+.cal div { border-bottom: 1px solid var(--p-line); border-left: 1px solid var(--p-line); height: 28px; padding: 2px; }
+.ev { background: #fbe9dd; color: #a8470e; border-radius: 4px; padding: 1px 4px; font-size: 9.5px; }
+.ev.s { background: #e3ebf3; color: var(--p-steel); }
+.matrix td.c { text-align: center; }
+.tog { display: inline-block; width: 22px; height: 12px; border-radius: 6px; background: var(--p-accent); position: relative; vertical-align: middle; }
+.tog::after { content: ""; position: absolute; right: 2px; top: 2px; width: 8px; height: 8px; border-radius: 50%; background: #fff; }
+.tog.off { background: #c9d1d9; } .tog.off::after { right: auto; left: 2px; }
+.phone { width: 230px; margin: 0 auto; border: 8px solid #1b2733; border-radius: 26px; background: var(--p-bg); overflow: hidden; color: var(--p-ink); font: 11px/1.4 var(--body); }
+.phone .ph { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.note { font: 500 11px var(--mono); color: var(--muted); margin: 6px 0 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+  <header class="col">
+    <div class="eyebrow">IOTx · product plan and screen album</div>
+    <h1>IOTx Suite: your company's software, built by talking to it</h1>
+    <p class="lede">One sign-in for the whole organization: AI chat, an app builder, an internal app store, and the everyday tools people work in. The admin decides who sees what. When a client outgrows what they can build themselves, the IOTx team builds it with them.</p>
+    <nav class="toc" aria-label="Sections">
+      <a href="#sell">Will it sell?</a><a href="#offers">The two offers</a><a href="#who">Who uses it</a><a href="#arranged">How it's arranged</a><a href="#growth">How a client grows</a><a href="#rollout">Roll-out</a><a href="#phases">What to launch first</a><a href="#album">Screen album</a>
+    </nav>
+  </header>
+
+  <section id="sell" class="col">
+    <h2>Will this be sellable?</h2>
+    <div class="verdict"><span class="tag">Yes</span><p><b>Yes, if it is sold as "your company's own software, plus the tools your team already needs" to mid-sized industrial companies like Supreme Steel and Crystal Arc.</b> It is a harder sell as a general office suite that competes head-on with Google Workspace and Microsoft 365.</p></div>
+    <h3>Why companies will pay</h3>
+    <ul>
+      <li><b>They already pay IOTx for custom software.</b> Today each change waits for your developers. With the suite, they make small dashboards and trackers themselves the same day, and call IOTx for the big systems.</li>
+      <li><b>Spreadsheets and WhatsApp run most of their operations.</b> Turning a sheet into a proper app (with logins, approvals and a dashboard) is the most common need, and the builder does exactly that.</li>
+      <li><b>One login, one bill, one admin.</b> Owners like seeing every tool, every app and every person in one place, with control over who sees what.</li>
+      <li><b>The software never runs out.</b> A client starts with a small dashboard and grows to a Supreme Steel-level system without changing products.</li>
+    </ul>
+    <h3>Who else is in this space</h3>
+    <div class="compare">
+      <table>
+        <thead><tr><th>What the client needs</th><th>IOTx Suite</th><th>Google / Microsoft</th><th>Zoho One</th><th>Lovable / builders</th></tr></thead>
+        <tbody>
+          <tr><td>Mail, calendar, docs, sheets</td><td class="part">Yes (start by connecting their existing ones)</td><td class="yes">Best in class</td><td class="yes">Yes</td><td class="no">No</td></tr>
+          <tr><td>Build an app by describing it</td><td class="yes">Yes, the core</td><td class="part">Limited (Power Apps, AppSheet)</td><td class="part">Low-code (Zoho Creator)</td><td class="yes">Yes</td></tr>
+          <tr><td>Apps shared inside the company with roles</td><td class="yes">Yes, built in</td><td class="part">Separate setup</td><td class="yes">Yes</td><td class="part">Manual</td></tr>
+          <tr><td>Industry templates (steel, manufacturing)</td><td class="yes">Yes, from IOTx's own projects</td><td class="no">No</td><td class="part">Generic</td><td class="no">No</td></tr>
+          <tr><td>A team that builds the big system with you</td><td class="yes">Yes (Transformation)</td><td class="no">Partners only</td><td class="part">Partners</td><td class="no">No</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Zoho One is the closest comparison: a suite plus a low-code builder. The edge for IOTx is AI building in plain language, industry templates taken from real client projects, and a team that builds the large systems alongside the client.</p>
+    <h3>What has to be true</h3>
+    <div class="grid2">
+      <div class="box"><h3>Do</h3><ul><li>Lead with the builder, AI chat and the internal app store.</li><li>Connect the client's existing Google or Microsoft mail and calendar at first, instead of asking them to switch.</li><li>Ship industry templates (inventory, dispatch, quality checks, orders) from day one.</li><li>Sell the Transformation service alongside every suite.</li></ul></div>
+      <div class="box"><h3>Watch out for</h3><ul><li>Thirteen tools is a lot to make good. Each one people use daily (mail, sheets) is judged against Google and Microsoft.</li><li>Companies won't move their email in month one. Make switching optional.</li><li>Admins need to feel safe: clear roles, audit logs, and their data kept in their organization.</li></ul></div>
+    </div>
+    <h3>A simple way to price it</h3>
+    <ul>
+      <li><b>Per person per month</b> for the suite (every employee who signs in).</li>
+      <li><b>Build credits</b> included each month for making apps with AI, with top-ups.</li>
+      <li><b>Transformation projects</b> priced separately, as IOTx does today.</li>
+    </ul>
+  </section>
+
+  <section id="offers" class="col">
+    <h2>The two offers</h2>
+    <div class="grid2">
+      <div class="box"><div class="eyebrow">Offer 1</div><h3>The configured product (IOTx Suite)</h3><p>The client signs up, IOTx switches on the modules they bought, and their people start working on day one: AI chat, the builder, the app store and the everyday tools. The client builds their own dashboards and apps whenever they need them.</p></div>
+      <div class="box"><div class="eyebrow">Offer 2</div><h3>Transformation</h3><p>For systems the size of Supreme Steel's, the IOTx team designs and builds a custom app with the client, inside their suite. When it's done, it appears in their app store like any other app, and the client can keep extending it themselves.</p></div>
+    </div>
+  </section>
+
+  <section id="who" class="col">
+    <h2>Who uses it</h2>
+    <div class="roles">
+      <div class="role"><b>Owner and admins</b><p class="muted">Set up the organization, departments and roles. Decide which modules and apps each role sees. See usage and billing.</p></div>
+      <div class="role"><b>Department heads</b><p class="muted">Approve apps for their team, share dashboards, and ask IOTx for larger builds.</p></div>
+      <div class="role"><b>Builders</b><p class="muted">The people who like making things, often ops or finance. They build apps by chatting and connect data from sheets or databases.</p></div>
+      <div class="role"><b>Everyone else</b><p class="muted">Sign in, see only the tools and apps they're given, and get their work done. Ask the AI anything about the company.</p></div>
+      <div class="role"><b>IOTx team</b><p class="muted">Onboards the client, trains builders, and delivers Transformation projects.</p></div>
+    </div>
+  </section>
+
+  <section id="arranged" class="col">
+    <h2>How it's arranged</h2>
+    <h3>The organization</h3>
+    <p>Each client is one organization, for example <b>Crystal Arc</b>. Inside it are <b>departments</b> (Sales, Production, Dispatch, Accounts, HR) and <b>people</b>, each with a role: admin, builder, member or viewer.</p>
+    <h3>The modules</h3>
+    <div class="grid2">
+      <div class="box"><h3>Work by talking</h3><ul><li><b>Home and AI Chat:</b> ask anything, start anything.</li><li><b>Apps Builder:</b> describe an app, get an app.</li><li><b>Store:</b> the company's approved apps and IOTx templates.</li><li><b>Add new:</b> connect outside apps (accounting, ERP, WhatsApp).</li></ul></div>
+      <div class="box"><h3>Everyday tools</h3><ul><li><b>Mail, Calendar, Meetings</b></li><li><b>Docs, Sheets, Slides</b></li><li><b>Files</b> for organizing, <b>Notes</b></li><li><b>Tasks</b> (boards and sprints, like Jira)</li><li><b>Read:</b> the company's policies, manuals and SOPs</li></ul></div>
+    </div>
+    <h3>Who sees what</h3>
+    <p>The admin switches each module and each app on or off for each role and department. A dispatch clerk might see only Home, Tasks and the Dispatch Tracker app. A plant head sees everything for Production. Anything a person can't see simply isn't in their sidebar.</p>
+    <h3>Where an app's data lives</h3>
+    <ul>
+      <li><b>IOTx Cloud database:</b> the default, set up automatically when an app needs to save data.</li>
+      <li><b>The company's own sheets:</b> a Google Sheet or a sheet in IOTx Sheets becomes the app's data.</li>
+      <li><b>Their own database</b> (for example Supabase), or an existing system connected through "Add new".</li>
+    </ul>
+    <h3>How apps are shared</h3>
+    <p>A builder makes an app, then shares it: with named people, a department, a role, or the whole company. Apps the admin approves appear in the Store for everyone allowed to see them. Public-facing apps (a customer order form, for example) can be published to a web address.</p>
+  </section>
+
+  <section id="growth" class="col">
+    <h2>How a client grows</h2>
+    <div class="path">
+      <div class="step"><span class="when">Day 1</span><b>Everyone signs in</b><span class="muted">Company sign-in, modules switched on, AI chat answering questions about the company.</span></div>
+      <div class="step"><span class="when">Week 1</span><b>First dashboard</b><span class="muted">An ops manager turns the dispatch sheet into a live dashboard and shares it with the plant.</span></div>
+      <div class="step"><span class="when">Month 1</span><b>A handful of apps</b><span class="muted">Leave requests, quality checklists and stock counts, each built in an afternoon.</span></div>
+      <div class="step"><span class="when">Month 3–6</span><b>The big system</b><span class="muted">IOTx Transformation builds a Supreme Steel-level app (orders to dispatch to invoicing) inside the suite.</span></div>
+    </div>
+  </section>
+
+  <section id="rollout" class="col">
+    <h2>Roll-out for a new client</h2>
+    <ol>
+      <li><b>Demo on their own data.</b> Bring one of their sheets and turn it into an app in the meeting.</li>
+      <li><b>Set up.</b> Organization, departments, company sign-in, the modules they bought.</li>
+      <li><b>Connect what they already use.</b> Mail and calendar, their sheets, their accounting or ERP.</li>
+      <li><b>Train two or three builders.</b> One session; they build their first real app with IOTx beside them.</li>
+      <li><b>Open it up.</b> Everyone else gets access to the tools and apps meant for them.</li>
+      <li><b>Review monthly.</b> Usage, what was built, and what should become a Transformation project.</li>
+    </ol>
+  </section>
+
+  <section id="phases" class="col">
+    <h2>What to launch first</h2>
+    <div class="grid2">
+      <div class="box"><div class="eyebrow">Phase 1 · launch</div><ul><li>Home and AI Chat</li><li>Apps Builder (ready today)</li><li>Store and Add new</li><li>Files, Notes, Tasks</li><li>Admin: roles and module visibility</li><li>Connect Google or Microsoft mail and calendar</li></ul></div>
+      <div class="box"><div class="eyebrow">Phase 2 · next</div><ul><li>Docs, Sheets, Slides</li><li>Read (policies and manuals)</li><li>Meetings</li></ul><div class="eyebrow" style="margin-top:12px">Phase 3 · later</div><ul><li>IOTx's own Mail and Calendar, for clients who want to move off Google or Microsoft</li></ul></div>
+    </div>
+  </section>
+
+  <section id="album">
+    <div class="col">
+      <h2>Screen album</h2>
+      <p class="muted">Every screen in the suite, in the order people meet them. The company, people and figures are illustrative examples for Crystal Arc, not real data.</p>
+    </div>
+
+    <!-- Chapter A -->
+    <div class="chapter">
+      <div class="col"><div class="eyebrow">Chapter A</div><h3 style="font-size:1.5rem;margin-top:6px">Getting in</h3></div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app/sign-in</span></div>
+          <div style="display:grid;place-items:center;min-height:380px;background:linear-gradient(160deg,#eef2f6,#f9f1ea)">
+            <div class="card" style="width:300px;padding:22px;display:flex;flex-direction:column;gap:10px;align-items:stretch;text-align:center">
+              <div style="margin:0 auto" class="ic" ><span style="background:var(--p-accent);width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:#fff;font:800 12px var(--display)">CA</span></div>
+              <div class="b" style="font:700 15px var(--display)">Crystal Arc on IOTx</div>
+              <div class="sm">Sign in with your company account</div>
+              <span class="btn" style="padding:9px">Continue with Crystal Arc SSO</span>
+              <span class="btn ghost" style="padding:9px">Continue with Google</span>
+              <span class="btn ghost" style="padding:9px">Continue with Microsoft</span>
+              <div class="sm">New here? Ask your admin for an invite.</div>
+            </div>
+          </div></div></div>
+        <div class="cap"><div class="num">A1</div><h3>Sign in</h3><dl><dt>What it's for</dt><dd>Everyone signs in with their company account. Their organization's name and logo are on the page.</dd><dt>What you can do</dt><dd>Use company single sign-on, or Google or Microsoft. New people join through an invite or because their email is on the company domain.</dd><dt>Who sees it</dt><dd>Everyone.</dd></dl></div>
+      </div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span class="on">Home</span><span>Chat</span><span>Build</span><span>Store</span><span>Docs</span><span>Sheets</span><span>Slides</span><span>Mail</span><span>Cal</span><span>Meet</span><span>Files</span><span>Notes</span><span>Tasks</span><span>Read</span><div class="gap"></div><span>Admin</span></div>
+            <div class="main" style="align-items:center;justify-content:center;gap:14px;background:radial-gradient(ellipse at top,#f9ebdf,transparent 60%)">
+              <div style="font:800 22px var(--display);text-align:center">Good morning, Priya. What do you want to do?</div>
+              <div class="big-input" style="width:78%">Show me this week's dispatches that are running late<div class="sm" style="margin-top:8px;display:flex;gap:8px"><span class="pill">Ask</span><span class="pill o">Build an app</span><span class="pill">Write a doc</span><span style="flex:1"></span><span class="btn">Send</span></div></div>
+              <div class="chips" style="justify-content:center;width:80%"><span class="chip">Turn my stock sheet into an app</span><span class="chip">Summarize yesterday's production</span><span class="chip">Draft a price-revision email</span><span class="chip">Find the safety SOP</span></div>
+              <div class="g4" style="width:86%"><div class="tile"><div class="ic" style="background:#d9641e">APP</div><b>Dispatch Tracker</b><span class="sm">Opened 2h ago</span></div><div class="tile"><div class="ic" style="background:#2f4a63">SHT</div><b>Coil stock</b><span class="sm">Sheet · edited today</span></div><div class="tile"><div class="ic" style="background:#1f7a4d">TSK</div><b>3 tasks due</b><span class="sm">Tasks</span></div><div class="tile"><div class="ic" style="background:#6b4fa0">MTG</div><b>Plant review 11:00</b><span class="sm">Meetings</span></div></div>
+            </div></div></div></div>
+        <div class="cap"><div class="num">A2</div><h3>Home: ask or start anything</h3><dl><dt>What it's for</dt><dd>The first screen, like Lovable's: one box where people ask a question, start an app, or write something.</dd><dt>What you can do</dt><dd>Ask about the company ("late dispatches this week"), build an app from a sentence, open recent apps, sheets, tasks and meetings. The sidebar shows only the modules this person is allowed to use.</dd><dt>Who sees it</dt><dd>Everyone. The suggestions follow their role.</dd></dl></div>
+      </div>
+    </div>
+
+    <!-- Chapter B -->
+    <div class="chapter">
+      <div class="col"><div class="eyebrow">Chapter B</div><h3 style="font-size:1.5rem;margin-top:6px">Building your own software</h3><p class="muted">How a builder turns a need into an app the whole team uses.</p></div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app/build/dispatch-tracker</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span>Home</span><span>Chat</span><span class="on">Build</span><span>Store</span><span>Docs</span><span>Sheets</span><span>Files</span><span>Tasks</span><div class="gap"></div><span>Admin</span></div>
+            <div class="main"><div class="top"><span class="title">Dispatch Tracker</span><span class="pill o">Draft</span><span class="sp"></span><span class="btn ghost">Preview</span><span class="btn">Share</span></div>
+              <div class="split"><div class="card" style="display:flex;flex-direction:column;gap:8px">
+                <div class="msg me">Make a dispatch tracker from our Dispatch sheet. Show trucks, customer, coils, status, and flag anything late. Plant heads approve before a truck leaves.</div>
+                <div class="msg ai">Done. I built a dashboard with today's trucks, a late-dispatch list, and an approval step for plant heads. It reads and writes your Dispatch sheet.<div class="sm" style="margin-top:4px">Checked: desktop and phone, sign-in, approvals</div></div>
+                <div class="chips"><span class="chip">Add a WhatsApp alert when late</span><span class="chip">Add a monthly report</span></div>
+                <div class="input" style="margin-top:auto">Ask for a change…</div></div>
+                <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="b">Today · 14 trucks</div><div class="g3"><div class="card"><div class="sm">Loaded</div><div class="b" style="font-size:16px">9</div></div><div class="card"><div class="sm">Awaiting approval</div><div class="b" style="font-size:16px">3</div></div><div class="card"><div class="sm">Late</div><div class="b" style="font-size:16px;color:#b3261e">2</div></div></div>
+                  <table class="tbl"><tr><th>Truck</th><th>Customer</th><th>Coils</th><th>Status</th></tr><tr><td>MH-12-4471</td><td>Delta Fab</td><td>6</td><td><span class="pill g">Loaded</span></td></tr><tr><td>MH-14-2290</td><td>Orbit Tubes</td><td>4</td><td><span class="pill o">Approve</span></td></tr><tr><td>GJ-05-1186</td><td>Kiran Steel</td><td>8</td><td><span class="pill r">Late 3h</span></td></tr></table></div></div>
+            </div></div></div></div>
+        <div class="cap"><div class="num">B1</div><h3>Builder: describe it, see it</h3><dl><dt>What it's for</dt><dd>The heart of the suite. A builder says what they need in plain words and watches the app appear.</dd><dt>What you can do</dt><dd>Describe the app, then keep asking for changes ("add a WhatsApp alert"). The AI checks its own work and suggests next steps. Nothing goes to other people until it's shared.</dd><dt>Who sees it</dt><dd>Builders and admins.</dd></dl></div>
+      </div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app/build/dispatch-tracker/data</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span>Home</span><span>Chat</span><span class="on">Build</span><span>Store</span><span>Sheets</span><div class="gap"></div><span>Admin</span></div>
+            <div class="main"><div class="top"><span class="title">Where should this app keep its data?</span></div>
+              <div class="g3">
+                <div class="card" style="border:1.5px solid var(--p-accent)"><div class="ic" style="background:#d9641e">DB</div><div class="b" style="margin-top:6px">IOTx Cloud</div><div class="sm">Ready instantly. Sign-in, backups and access rules included.</div><span class="pill o" style="margin-top:6px">Recommended</span></div>
+                <div class="card"><div class="ic" style="background:#1f7a4d">SH</div><div class="b" style="margin-top:6px">A sheet</div><div class="sm">Use the Dispatch sheet in IOTx Sheets or Google Sheets. People keep editing it as before.</div><span class="pill g" style="margin-top:6px">Connected: Dispatch 2026</span></div>
+                <div class="card"><div class="ic" style="background:#2f4a63">PG</div><div class="b" style="margin-top:6px">Your database</div><div class="sm">Supabase, or your existing system through Add new.</div></div>
+              </div>
+              <div class="card"><div class="b">Columns found in "Dispatch 2026"</div><div class="chips" style="margin-top:6px"><span class="chip">Date</span><span class="chip">Truck no.</span><span class="chip">Customer</span><span class="chip">Coils</span><span class="chip">Weight (MT)</span><span class="chip">Status</span><span class="chip">Approved by</span></div><div class="sm" style="margin-top:6px">The app reads new rows as people add them, and writes approvals back to the sheet.</div></div>
+            </div></div></div></div>
+        <div class="cap"><div class="num">B2</div><h3>Choose the data</h3><dl><dt>What it's for</dt><dd>Apps need somewhere to keep their information. The client chooses, or the AI picks IOTx Cloud for them.</dd><dt>What you can do</dt><dd>Use IOTx Cloud (nothing to set up), one of the company's sheets, or their own database. With a sheet, the team can keep working in the sheet while the app shows it as a dashboard.</dd><dt>Who sees it</dt><dd>Builders and admins.</dd></dl></div>
+      </div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app/build/dispatch-tracker/share</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span>Home</span><span class="on">Build</span><span>Store</span><div class="gap"></div><span>Admin</span></div>
+            <div class="main" style="align-items:center;justify-content:center"><div class="card" style="width:430px;padding:16px;display:flex;flex-direction:column;gap:10px">
+              <div class="b" style="font:700 14px var(--display)">Share "Dispatch Tracker"</div>
+              <div class="input">Add people, departments or roles</div>
+              <table class="tbl"><tr><td><b>Dispatch department</b> · 12 people</td><td>Can use</td></tr><tr><td><b>Plant heads</b> · role</td><td>Can approve</td></tr><tr><td><b>Rohit Mehta</b> · builder</td><td>Can edit</td></tr></table>
+              <div class="card" style="background:#f9fafb"><div class="b">List it in the company Store</div><div class="sm">Your admin approves it first, then people with access find it in the Store.</div></div>
+              <div class="sm">Public link: off · Phones: works in the browser, add to home screen</div>
+              <div style="display:flex;justify-content:flex-end;gap:6px"><span class="btn ghost">Copy link</span><span class="btn">Share</span></div></div>
+            </div></div></div></div>
+        <div class="cap"><div class="num">B3</div><h3>Share with the team</h3><dl><dt>What it's for</dt><dd>Turning one person's app into the team's tool.</dd><dt>What you can do</dt><dd>Share with people, a department, or a role, and choose whether they can use, approve or edit. Ask to list the app in the company Store. Public links stay off unless the admin allows them.</dd><dt>Who sees it</dt><dd>The app's builder and admins.</dd></dl></div>
+      </div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app/store</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span>Home</span><span>Chat</span><span>Build</span><span class="on">Store</span><span>Files</span><span>Tasks</span><div class="gap"></div><span>Admin</span></div>
+            <div class="main"><div class="top"><span class="title">Store</span><span class="sp"></span><span class="chip">Our apps</span><span class="chip" style="background:#1b2733;color:#fff">IOTx templates</span><span class="chip">Requests</span></div>
+              <div class="g3">
+                <div class="tile"><div class="ic" style="background:#d9641e">INV</div><b>Steel inventory</b><span class="sm">Coils and sheets by grade, thickness, yard location. From IOTx's steel projects.</span><span class="btn ghost">Use template</span></div>
+                <div class="tile"><div class="ic" style="background:#2f4a63">QC</div><b>Quality check</b><span class="sm">Test certificates, heat numbers, pass/fail with photos.</span><span class="btn ghost">Use template</span></div>
+                <div class="tile"><div class="ic" style="background:#1f7a4d">ORD</div><b>Order to dispatch</b><span class="sm">Orders, production plan, loading and invoices.</span><span class="btn ghost">Use template</span></div>
+                <div class="tile"><div class="ic" style="background:#6b4fa0">HR</div><b>Leave and attendance</b><span class="sm">Requests, approvals, monthly summary.</span><span class="btn ghost">Use template</span></div>
+                <div class="tile"><div class="ic" style="background:#a15c07">MNT</div><b>Machine maintenance</b><span class="sm">Breakdowns, schedules, spare parts.</span><span class="btn ghost">Use template</span></div>
+                <div class="tile"><div class="ic" style="background:#3c6e8f">CRM</div><b>Dealer CRM</b><span class="sm">Dealers, visits, price lists, follow-ups.</span><span class="btn ghost">Use template</span></div>
+              </div></div></div></div></div>
+        <div class="cap"><div class="num">B4</div><h3>Store</h3><dl><dt>What it's for</dt><dd>The company's own app store: apps made inside the company, plus ready templates from IOTx's industry projects.</dd><dt>What you can do</dt><dd>Open the company's approved apps; start from a template and adapt it by chatting; request an app the company doesn't have yet.</dd><dt>Who sees it</dt><dd>Everyone sees the apps they're allowed to use. Builders also see templates.</dd></dl></div>
+      </div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app/add-new</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span>Home</span><span>Build</span><span>Store</span><span class="on">Add</span><div class="gap"></div><span>Admin</span></div>
+            <div class="main"><div class="top"><span class="title">Add new: connect an outside app</span></div>
+              <div class="g4">
+                <div class="tile"><b>Tally</b><span class="sm">Accounts and invoices</span><span class="pill g">Connected</span></div>
+                <div class="tile"><b>SAP / ERP</b><span class="sm">Orders and stock</span><span class="btn ghost">Connect</span></div>
+                <div class="tile"><b>WhatsApp Business</b><span class="sm">Alerts to drivers and dealers</span><span class="pill g">Connected</span></div>
+                <div class="tile"><b>Google Workspace</b><span class="sm">Mail, calendar, sheets</span><span class="pill g">Connected</span></div>
+                <div class="tile"><b>Microsoft 365</b><span class="sm">Outlook, Teams, Excel</span><span class="btn ghost">Connect</span></div>
+                <div class="tile"><b>Supabase</b><span class="sm">Your own database</span><span class="btn ghost">Connect</span></div>
+                <div class="tile"><b>Weighbridge</b><span class="sm">Truck weights (via IOTx)</span><span class="btn ghost">Ask IOTx</span></div>
+                <div class="tile"><b>Your own system</b><span class="sm">Any web address with a key</span><span class="btn ghost">Add</span></div>
+              </div></div></div></div></div>
+        <div class="cap"><div class="num">B5</div><h3>Add new</h3><dl><dt>What it's for</dt><dd>Bringing the client's other software into the suite, so apps and the AI can use it.</dd><dt>What you can do</dt><dd>Connect accounting, ERP, WhatsApp, Google or Microsoft, a database, or any system with a web address. Once connected, a builder can say "show unpaid invoices from Tally" in an app.</dd><dt>Who sees it</dt><dd>Admins connect; builders use what's connected.</dd></dl></div>
+      </div>
+    </div>
+
+    <!-- Chapter C -->
+    <div class="chapter">
+      <div class="col"><div class="eyebrow">Chapter C</div><h3 style="font-size:1.5rem;margin-top:6px">Everyday work</h3><p class="muted">The tools people spend their day in, all with the same AI help built in.</p></div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app/chat</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span>Home</span><span class="on">Chat</span><span>Build</span><span>Store</span><span>Docs</span><span>Sheets</span><div class="gap"></div><span>Admin</span></div>
+            <div class="main"><div class="top"><span class="title">AI Chat</span><span class="sp"></span><span class="pill">Uses: Dispatch Tracker, Coil stock, Read</span></div>
+              <div class="card" style="display:flex;flex-direction:column;gap:8px;flex:1">
+                <div class="msg me">How much HR coil did we dispatch to Delta Fab this month, and is anything pending?</div>
+                <div class="msg ai"><b>182.4 MT</b> across 11 trucks this month. One truck (6 coils, 31.2 MT) is waiting for plant-head approval since 10:40.<div class="chips" style="margin-top:6px"><span class="chip">Open in Dispatch Tracker</span><span class="chip">Remind the plant head</span><span class="chip">Make this a weekly report</span></div><div class="sm" style="margin-top:4px">Sources: Dispatch Tracker · Coil stock sheet</div></div>
+                <div class="input" style="margin-top:auto">Ask about anything in Crystal Arc…</div></div>
+            </div></div></div></div>
+        <div class="cap"><div class="num">C1</div><h3>AI Chat</h3><dl><dt>What it's for</dt><dd>Asking questions about the company in plain language, and getting things done from the answer.</dd><dt>What you can do</dt><dd>Ask about dispatches, stock, policies or meetings. The AI only uses the apps and files this person can already see, and shows its sources. Turn any answer into a reminder, a report or an app.</dd><dt>Who sees it</dt><dd>Everyone it's switched on for.</dd></dl></div>
+      </div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app/mail</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span>Home</span><span>Chat</span><span class="on">Mail</span><span>Cal</span><span>Meet</span><div class="gap"></div><span>Admin</span></div>
+            <div class="main" style="display:grid;grid-template-columns:150px 1fr;gap:10px"><div class="card" style="display:flex;flex-direction:column;gap:6px"><span class="btn">Write</span><b>Inbox</b><span class="sm">Sent · Drafts · Dealers · Plant</span><span class="pill">via Google Workspace</span></div>
+              <div style="display:flex;flex-direction:column;gap:8px"><div class="card"><div class="b">Delta Fab · Revised PO for 40 MT</div><div class="sm">Arjun, Purchase · 9:12</div><p style="margin:6px 0">Please revise the price for the 2.5 mm HR coil to match last month's agreement and confirm dispatch by Friday.</p><div class="card" style="background:#fff7f1;border-color:#f3cfb4"><b>AI:</b> Last month's agreed rate was in the Q3 price list (Read). Dispatch Tracker shows 2 trucks free on Friday.<div class="chips" style="margin-top:6px"><span class="chip">Draft a reply</span><span class="chip">Create a dispatch task</span></div></div></div><div class="card sm">Orbit Tubes · Test certificate for heat 44871 · 8:40</div><div class="card sm">HR · Diwali holiday schedule · Yesterday</div></div></div></div></div></div>
+        <div class="cap"><div class="num">C2</div><h3>Mail</h3><dl><dt>What it's for</dt><dd>Email inside the suite, connected to the company's existing Google or Microsoft mail at launch.</dd><dt>What you can do</dt><dd>Read and write mail, and let the AI connect a message to company data: draft replies, create tasks, look up prices or dispatch slots.</dd><dt>Who sees it</dt><dd>Everyone with a mailbox.</dd></dl></div>
+      </div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app/calendar</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span>Home</span><span>Mail</span><span class="on">Cal</span><span>Meet</span><div class="gap"></div><span>Admin</span></div>
+            <div class="main"><div class="top"><span class="title">Calendar · This week</span><span class="sp"></span><span class="btn">New event</span></div>
+              <div class="cal"><div></div><div class="b">Mon</div><div class="b">Tue</div><div class="b">Wed</div><div class="b">Thu</div><div class="b">Fri</div>
+                <div class="sm">9:00</div><div></div><div><span class="ev s">Production plan</span></div><div></div><div></div><div><span class="ev s">Weekly MIS</span></div>
+                <div class="sm">10:00</div><div><span class="ev">Dealer visit · Pune</span></div><div></div><div></div><div><span class="ev">Delta Fab call</span></div><div></div>
+                <div class="sm">11:00</div><div></div><div></div><div><span class="ev s">Plant review</span></div><div></div><div></div>
+                <div class="sm">12:00</div><div></div><div><span class="ev">Audit prep</span></div><div></div><div></div><div></div>
+                <div class="sm">14:00</div><div><span class="ev s">Safety walk</span></div><div></div><div></div><div><span class="ev s">QC review</span></div><div><span class="ev">Dispatch sync</span></div>
+              </div></div></div></div></div>
+        <div class="cap"><div class="num">C3</div><h3>Calendar</h3><dl><dt>What it's for</dt><dd>Everyone's schedule in one place, synced with their existing calendar.</dd><dt>What you can do</dt><dd>See the week, book rooms and meetings, find a time that works for a group. The AI can schedule ("set a QC review with the plant heads next week").</dd><dt>Who sees it</dt><dd>Everyone.</dd></dl></div>
+      </div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app/meet/plant-review</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span>Home</span><span>Cal</span><span class="on">Meet</span><div class="gap"></div><span>Admin</span></div>
+            <div class="main" style="display:grid;grid-template-columns:1.4fr 1fr;gap:10px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div class="card" style="background:#2b3a48;color:#fff;height:110px;display:grid;place-items:center">Priya (you)</div><div class="card" style="background:#34475a;color:#fff;height:110px;display:grid;place-items:center">Rohit · Plant 2</div><div class="card" style="background:#34475a;color:#fff;height:110px;display:grid;place-items:center">Anita · QC</div><div class="card" style="background:#2b3a48;color:#fff;height:110px;display:grid;place-items:center">Sameer · Dispatch</div><div style="grid-column:span 2;display:flex;gap:6px;justify-content:center"><span class="btn ghost">Mute</span><span class="btn ghost">Share screen</span><span class="btn" style="background:#b3261e">Leave</span></div></div>
+              <div class="card" style="display:flex;flex-direction:column;gap:6px"><b>Live notes by AI</b><div class="sm">11:04 · Line 2 downtime 3.5 h, roller change</div><div class="sm">11:07 · QC: 2 coils on hold, heat 44871</div><b style="margin-top:4px">Action items</b><div class="sm">☐ Rohit: spare roller order, Thursday</div><div class="sm">☐ Anita: retest heat 44871</div><span class="btn ghost" style="margin-top:auto">Send notes and create tasks</span></div></div></div></div></div>
+        <div class="cap"><div class="num">C4</div><h3>Meetings</h3><dl><dt>What it's for</dt><dd>Video meetings with notes taken for you.</dd><dt>What you can do</dt><dd>Join from the calendar, share a screen, and let the AI write the notes and action items. One click sends the notes and turns action items into tasks.</dd><dt>Who sees it</dt><dd>Everyone it's switched on for.</dd></dl></div>
+      </div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app/docs/q3-price-revision</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span>Home</span><span class="on">Docs</span><span>Sheets</span><span>Slides</span><div class="gap"></div><span>Admin</span></div>
+            <div class="main"><div class="top"><span class="title">Q3 price revision note</span><span class="pill">Shared with Sales</span><span class="sp"></span><span class="btn ghost">Comment</span><span class="btn">Share</span></div>
+              <div class="card" style="padding:18px 26px"><div style="font:700 16px var(--display)">Price revision: HR coil, Q3</div><p class="sm" style="margin:6px 0">Prepared by Sales · for dealers in the West region</p><p style="margin:6px 0">Raw material costs rose 4.2% over the quarter. We propose revising HR coil (2.0–3.0 mm) by ₹1,150/MT from 1 October, with existing orders honoured at the old rate.</p><div class="card" style="background:#fff7f1;border-color:#f3cfb4"><b>AI:</b> Add the dispatch volume for each dealer from Dispatch Tracker? <span class="chip">Insert table</span></div></div></div></div></div></div>
+        <div class="cap"><div class="num">C5</div><h3>Docs</h3><dl><dt>What it's for</dt><dd>Writing together: notes, proposals, reports, letters.</dd><dt>What you can do</dt><dd>Write and comment together; ask the AI to draft, shorten or translate; pull live numbers from the company's apps into a document.</dd><dt>Who sees it</dt><dd>Everyone it's switched on for. Each document has its own sharing.</dd></dl></div>
+      </div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app/sheets/coil-stock</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span>Home</span><span>Docs</span><span class="on">Sheets</span><span>Slides</span><div class="gap"></div><span>Admin</span></div>
+            <div class="main"><div class="top"><span class="title">Coil stock</span><span class="pill g">Used by 2 apps</span><span class="sp"></span><span class="btn ghost">Make an app from this</span></div>
+              <table class="tbl sheet"><tr><th></th><th>A · Coil no.</th><th>B · Grade</th><th>C · Thickness (mm)</th><th>D · Weight (MT)</th><th>E · Yard</th><th>F · Status</th></tr><tr><td>2</td><td>C-24117</td><td>IS 2062 E250</td><td>2.5</td><td>5.21</td><td>Y3-B</td><td>Available</td></tr><tr><td>3</td><td>C-24118</td><td>IS 2062 E250</td><td>2.5</td><td>5.08</td><td>Y3-B</td><td>Reserved</td></tr><tr><td>4</td><td>C-24125</td><td>SAPH 440</td><td>3.0</td><td>6.40</td><td>Y1-A</td><td>Available</td></tr><tr><td>5</td><td>C-24131</td><td>IS 2062 E350</td><td>4.0</td><td>7.12</td><td>Y2-C</td><td>On hold (QC)</td></tr><tr><td>6</td><td></td><td></td><td></td><td style="background:#fff7f1">=SUM(D2:D5) 23.81</td><td></td><td></td></tr></table>
+              <div class="card" style="background:#fff7f1;border-color:#f3cfb4"><b>AI:</b> 1 coil has been on QC hold for 6 days. Show all holds older than 3 days? <span class="chip">Filter</span></div></div></div></div></div>
+        <div class="cap"><div class="num">C6</div><h3>Sheets</h3><dl><dt>What it's for</dt><dd>Spreadsheets, which can also be the data behind company apps.</dd><dt>What you can do</dt><dd>Work as in any spreadsheet; ask the AI for formulas and filters; turn a sheet into an app with one click. Apps built on a sheet stay in sync with it.</dd><dt>Who sees it</dt><dd>Everyone it's switched on for. Each sheet has its own sharing.</dd></dl></div>
+      </div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app/slides/monthly-mis</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span>Home</span><span>Docs</span><span>Sheets</span><span class="on">Slides</span><div class="gap"></div><span>Admin</span></div>
+            <div class="main" style="display:grid;grid-template-columns:110px 1fr;gap:10px"><div style="display:flex;flex-direction:column;gap:6px"><div class="card sm" style="border-color:var(--p-accent)">1 · September MIS</div><div class="card sm">2 · Dispatch</div><div class="card sm">3 · Production</div><div class="card sm">4 · Quality</div></div>
+              <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:8px"><div style="font:800 18px var(--display)">Dispatch: September</div><div class="g2"><div><div class="sm">Total dispatched</div><div style="font:800 22px var(--display)">4,812 MT</div><div class="sm">+7% on August</div></div><div class="chartbars"><i style="height:55%"></i><i style="height:62%"></i><i style="height:58%"></i><i style="height:70%"></i><i class="a" style="height:78%"></i></div></div><div class="card" style="background:#fff7f1;border-color:#f3cfb4"><b>AI:</b> Made from Dispatch Tracker. Update every month automatically?</div></div></div></div></div></div>
+        <div class="cap"><div class="num">C7</div><h3>Slides</h3><dl><dt>What it's for</dt><dd>Presentations, often the monthly MIS for the owners.</dd><dt>What you can do</dt><dd>Ask the AI to make a deck from the company's apps ("September MIS from Dispatch and Production"), edit it, present it, and have it update itself every month.</dd><dt>Who sees it</dt><dd>Everyone it's switched on for.</dd></dl></div>
+      </div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app/files</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span>Home</span><span>Docs</span><span class="on">Files</span><span>Notes</span><div class="gap"></div><span>Admin</span></div>
+            <div class="main"><div class="top"><span class="title">Files</span><span class="sp"></span><span class="input" style="padding:4px 10px;width:220px">Search all files…</span><span class="btn">Upload</span></div>
+              <div class="g4"><div class="tile"><b>Sales</b><span class="sm">142 files</span></div><div class="tile"><b>Quality</b><span class="sm">Test certificates · 318</span></div><div class="tile"><b>Dispatch</b><span class="sm">Challans · 96</span></div><div class="tile"><b>HR</b><span class="sm">Restricted</span></div></div>
+              <table class="tbl"><tr><th>Name</th><th>Folder</th><th>Updated</th><th>Who can see</th></tr><tr><td>TC_heat_44871.pdf</td><td>Quality</td><td>Today</td><td>Quality, Sales</td></tr><tr><td>Delta Fab PO 0921.pdf</td><td>Sales</td><td>Yesterday</td><td>Sales</td></tr><tr><td>Q3 price list.xlsx</td><td>Sales</td><td>2 days ago</td><td>Sales, Management</td></tr></table>
+              <div class="sm">Files attached in apps (photos, certificates) are filed here automatically.</div></div></div></div></div>
+        <div class="cap"><div class="num">C8</div><h3>Files</h3><dl><dt>What it's for</dt><dd>One place to organize every file, by department.</dd><dt>What you can do</dt><dd>Upload, search, and organize files into folders with their own access. Files attached in apps (test certificates, photos of loaded trucks) are filed automatically.</dd><dt>Who sees it</dt><dd>Everyone, limited to the folders they have access to.</dd></dl></div>
+      </div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app/notes</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span>Home</span><span>Files</span><span class="on">Notes</span><span>Tasks</span><div class="gap"></div><span>Admin</span></div>
+            <div class="main" style="display:grid;grid-template-columns:170px 1fr;gap:10px"><div style="display:flex;flex-direction:column;gap:6px"><div class="card sm" style="border-color:var(--p-accent)"><b>Dealer visit: Pune</b><br>Today</div><div class="card sm"><b>Line 2 ideas</b><br>Mon</div><div class="card sm"><b>Audit checklist</b><br>Last week</div></div>
+              <div class="card" style="padding:16px"><div style="font:700 15px var(--display)">Dealer visit: Pune</div><p style="margin:8px 0">Met Sharma Steels. Want 2.0 mm HR in 1250 width, about 60 MT a month from November. Asked about credit terms of 45 days.</p><div class="chips"><span class="chip">Turn into a task</span><span class="chip">Add to Dealer CRM</span><span class="chip">Share with Sales</span></div></div></div></div></div></div>
+        <div class="cap"><div class="num">C9</div><h3>Notes</h3><dl><dt>What it's for</dt><dd>Quick personal notes that can become real work.</dd><dt>What you can do</dt><dd>Write notes from the office or a phone; turn a note into a task, a CRM entry or a shared doc in one click.</dd><dt>Who sees it</dt><dd>Everyone. Notes are private until shared.</dd></dl></div>
+      </div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app/tasks/plant-2</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span>Home</span><span>Notes</span><span class="on">Tasks</span><div class="gap"></div><span>Admin</span></div>
+            <div class="main"><div class="top"><span class="title">Plant 2 · Sprint 14</span><span class="sp"></span><span class="btn ghost">Board</span><span class="btn ghost">List</span><span class="btn">New task</span></div>
+              <div class="kanban"><div class="colk"><b>To do</b><div class="t">Order spare rollers<br><span class="pill">Rohit · Thu</span></div><div class="t">Update SOP for coil strapping<br><span class="pill">Anita</span></div></div><div class="colk"><b>In progress</b><div class="t">Retest heat 44871<br><span class="pill o">QC · high</span></div><div class="t">Yard Y3 relabeling</div></div><div class="colk"><b>Review</b><div class="t">Line 2 downtime report<br><span class="pill">From meeting</span></div></div><div class="colk"><b>Done</b><div class="t">Weighbridge calibration</div><div class="t">Fire drill</div></div></div></div></div></div></div>
+        <div class="cap"><div class="num">C10</div><h3>Tasks</h3><dl><dt>What it's for</dt><dd>Team work tracking, like Jira: boards, lists, sprints.</dd><dt>What you can do</dt><dd>Plan sprints, assign tasks, set due dates and priorities. Tasks also arrive from meetings, mail, notes and apps (a late dispatch can open a task).</dd><dt>Who sees it</dt><dd>Everyone it's switched on for. Each board has its own members.</dd></dl></div>
+      </div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app/read</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span>Home</span><span>Chat</span><span class="on">Read</span><div class="gap"></div><span>Admin</span></div>
+            <div class="main" style="display:grid;grid-template-columns:180px 1fr;gap:10px"><div style="display:flex;flex-direction:column;gap:6px"><b>Library</b><div class="card sm">Safety SOPs · 24</div><div class="card sm">HR policies · 12</div><div class="card sm">Machine manuals · 31</div><div class="card sm">Customer specs · 57</div></div>
+              <div class="card" style="padding:16px"><div class="pill g">Must read · 3 of 5 done</div><div style="font:700 15px var(--display);margin-top:6px">Crane operation SOP (rev. 4)</div><p style="margin:8px 0">Before lifting any coil, check the hook latch and the sling tag date. Never lift over walkways while people are present.</p><div class="card" style="background:#fff7f1;border-color:#f3cfb4"><b>Ask this document:</b> "What's the maximum coil weight for crane 2?"</div><div style="display:flex;gap:6px;margin-top:8px"><span class="btn">I've read this</span><span class="btn ghost">Listen</span></div></div></div></div></div></div>
+        <div class="cap"><div class="num">C11</div><h3>Read</h3><dl><dt>What it's for</dt><dd>The company's library: policies, SOPs, manuals and customer specifications. We read "Read" as this; change it if you meant something else.</dd><dt>What you can do</dt><dd>Browse and search documents, ask questions about them, listen to them, and confirm "I've read this" for required documents. Admins see who has read what.</dd><dt>Who sees it</dt><dd>Everyone, filtered to their department.</dd></dl></div>
+      </div>
+    </div>
+
+    <!-- Chapter D -->
+    <div class="chapter">
+      <div class="col"><div class="eyebrow">Chapter D</div><h3 style="font-size:1.5rem;margin-top:6px">Running the organization</h3><p class="muted">What the owner and admins see.</p></div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app/admin/access</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span>Home</span><span>Store</span><div class="gap"></div><span class="on">Admin</span></div>
+            <div class="main"><div class="top"><span class="title">Who sees what</span><span class="sp"></span><span class="chip">Modules</span><span class="chip" style="background:#1b2733;color:#fff">By role</span><span class="chip">By department</span></div>
+              <table class="tbl matrix"><tr><th>Module / app</th><th>Admin</th><th>Builder</th><th>Member</th><th>Viewer</th></tr>
+                <tr><td>AI Chat</td><td class="c"><span class="tog"></span></td><td class="c"><span class="tog"></span></td><td class="c"><span class="tog"></span></td><td class="c"><span class="tog"></span></td></tr>
+                <tr><td>Apps Builder</td><td class="c"><span class="tog"></span></td><td class="c"><span class="tog"></span></td><td class="c"><span class="tog off"></span></td><td class="c"><span class="tog off"></span></td></tr>
+                <tr><td>Mail, Calendar, Meetings</td><td class="c"><span class="tog"></span></td><td class="c"><span class="tog"></span></td><td class="c"><span class="tog"></span></td><td class="c"><span class="tog off"></span></td></tr>
+                <tr><td>Docs, Sheets, Slides</td><td class="c"><span class="tog"></span></td><td class="c"><span class="tog"></span></td><td class="c"><span class="tog"></span></td><td class="c"><span class="tog off"></span></td></tr>
+                <tr><td>Tasks</td><td class="c"><span class="tog"></span></td><td class="c"><span class="tog"></span></td><td class="c"><span class="tog"></span></td><td class="c"><span class="tog"></span></td></tr>
+                <tr><td>App: Dispatch Tracker</td><td class="c"><span class="tog"></span></td><td class="c"><span class="tog"></span></td><td class="c"><span class="tog"></span></td><td class="c"><span class="tog"></span></td></tr>
+                <tr><td>App: Payroll summary</td><td class="c"><span class="tog"></span></td><td class="c"><span class="tog off"></span></td><td class="c"><span class="tog off"></span></td><td class="c"><span class="tog off"></span></td></tr></table>
+              <div class="sm">Changes apply immediately. Every change is kept in the audit log.</div></div></div></div></div>
+        <div class="cap"><div class="num">D1</div><h3>Admin: who sees what</h3><dl><dt>What it's for</dt><dd>The control panel for access, the most important screen for the buyer.</dd><dt>What you can do</dt><dd>Switch each module and each company app on or off by role or department. What's switched off disappears from people's sidebars.</dd><dt>Who sees it</dt><dd>Owner and admins.</dd></dl></div>
+      </div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app/admin/people</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span>Home</span><div class="gap"></div><span class="on">Admin</span></div>
+            <div class="main"><div class="top"><span class="title">People and departments</span><span class="pill">148 of 160 seats</span><span class="sp"></span><span class="btn ghost">Invite link</span><span class="btn">Invite</span></div>
+              <div class="g4"><div class="tile"><b>Sales</b><span class="sm">22 people</span></div><div class="tile"><b>Production</b><span class="sm">54 people</span></div><div class="tile"><b>Dispatch</b><span class="sm">12 people</span></div><div class="tile"><b>Accounts</b><span class="sm">9 people</span></div></div>
+              <table class="tbl"><tr><th>Name</th><th>Department</th><th>Role</th><th>Last active</th></tr><tr><td>Priya Nair</td><td>Management</td><td>Admin</td><td>Now</td></tr><tr><td>Rohit Mehta</td><td>Production</td><td>Builder</td><td>Today</td></tr><tr><td>Sameer Khan</td><td>Dispatch</td><td>Member</td><td>Today</td></tr><tr><td>Anita Rao</td><td>Quality</td><td>Member <span class="pill o">asks for Builder</span></td><td>Yesterday</td></tr></table>
+              <div class="sm">New joiners arrive from the company's sign-in system automatically, with their department and role.</div></div></div></div></div>
+        <div class="cap"><div class="num">D2</div><h3>Admin: people and departments</h3><dl><dt>What it's for</dt><dd>Managing the company's people in the suite.</dd><dt>What you can do</dt><dd>Invite people or share an invite link, set departments and roles, approve requests to become a builder, and watch the seat count. With company sign-in, joiners and leavers are handled automatically.</dd><dt>Who sees it</dt><dd>Owner and admins.</dd></dl></div>
+      </div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app/admin/overview</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span>Home</span><div class="gap"></div><span class="on">Admin</span></div>
+            <div class="main"><div class="top"><span class="title">Overview · September</span></div>
+              <div class="g4"><div class="card"><div class="sm">People active</div><div class="b" style="font:800 18px var(--display)">131</div></div><div class="card"><div class="sm">Company apps</div><div class="b" style="font:800 18px var(--display)">17</div><div class="sm">+4 this month</div></div><div class="card"><div class="sm">Build credits</div><div class="b" style="font:800 18px var(--display)">612 / 1,000</div><div class="bar"><b style="width:61%"></b></div></div><div class="card"><div class="sm">Waiting for you</div><div class="b" style="font:800 18px var(--display);color:#a8470e">5</div></div></div>
+              <div class="g2"><div class="card"><b>Most used apps</b><div class="sm" style="margin-top:6px">Dispatch Tracker · 96 people<br>Quality check · 41<br>Leave and attendance · 138</div></div><div class="card"><b>Waiting for you</b><div class="sm" style="margin-top:6px">2 apps to approve for the Store<br>1 builder request (Anita Rao)<br>2 Transformation updates from IOTx</div></div></div></div></div></div></div>
+        <div class="cap"><div class="num">D3</div><h3>Admin: overview and billing</h3><dl><dt>What it's for</dt><dd>The owner's view of how the company uses the suite.</dd><dt>What you can do</dt><dd>See active people, apps built, build credits used, and everything waiting for approval. Buy more credits or seats, and set spending limits.</dd><dt>Who sees it</dt><dd>Owner and admins.</dd></dl></div>
+      </div>
+    </div>
+
+    <!-- Chapter E -->
+    <div class="chapter">
+      <div class="col"><div class="eyebrow">Chapter E</div><h3 style="font-size:1.5rem;margin-top:6px">The employee's view</h3><p class="muted">What someone with limited access sees.</p></div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span class="on">Home</span><span>Chat</span><span>Tasks</span><span>Read</span><div class="gap"></div></div>
+            <div class="main"><div class="top"><span class="title">Good morning, Sameer</span></div>
+              <div class="big-input">Ask anything, e.g. "Which trucks are waiting for approval?"</div>
+              <div class="b">Your apps</div>
+              <div class="g3"><div class="tile"><div class="ic" style="background:#d9641e">APP</div><b>Dispatch Tracker</b><span class="sm">3 trucks need loading photos</span></div><div class="tile"><div class="ic" style="background:#6b4fa0">HR</div><b>Leave and attendance</b><span class="sm">Leave balance: 9 days</span></div><div class="tile"><div class="ic" style="background:#1f7a4d">TSK</div><b>My tasks</b><span class="sm">2 due today</span></div></div>
+              <div class="sm">Only the tools your admin gave you appear here.</div></div></div></div></div>
+        <div class="cap"><div class="num">E1</div><h3>An employee's home</h3><dl><dt>What it's for</dt><dd>A simple start for someone who uses only a few tools.</dd><dt>What you can do</dt><dd>Ask questions, open their apps, see their tasks. A dispatch clerk sees Home, Chat, Tasks, Read and the Dispatch Tracker, nothing else.</dd><dt>Who sees it</dt><dd>Members and viewers.</dd></dl></div>
+      </div>
+
+      <div class="shot">
+        <div style="display:grid;place-items:center;padding:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px">
+          <div class="phone"><div class="ph"><div class="top"><span class="title" style="font-size:12px">Dispatch Tracker</span><span class="sp"></span><span class="pill">Sameer</span></div>
+            <div class="card"><div class="b">MH-14-2290 · Orbit Tubes</div><div class="sm">4 coils · 21.6 MT</div><span class="pill o" style="margin-top:4px">Waiting for approval</span></div>
+            <div class="card"><div class="b">GJ-05-1186 · Kiran Steel</div><div class="sm">8 coils · 41.3 MT</div><span class="pill r" style="margin-top:4px">Late 3h</span><div style="display:flex;gap:4px;margin-top:6px"><span class="btn ghost">Add photo</span><span class="btn">Mark loaded</span></div></div>
+            <div class="card"><div class="b">MH-12-4471 · Delta Fab</div><span class="pill g" style="margin-top:4px">Loaded</span></div></div></div>
+        </div>
+        <div class="cap"><div class="num">E2</div><h3>On the phone, in the yard</h3><dl><dt>What it's for</dt><dd>Every app works on phones in the browser, for people on the shop floor and in the yard.</dd><dt>What you can do</dt><dd>Open the shared app from a link or the home screen, take photos, mark trucks loaded, approve. No separate mobile app to install.</dd><dt>Who sees it</dt><dd>Anyone the app is shared with.</dd></dl></div>
+      </div>
+    </div>
+
+    <!-- Chapter F -->
+    <div class="chapter">
+      <div class="col"><div class="eyebrow">Chapter F</div><h3 style="font-size:1.5rem;margin-top:6px">Going further with IOTx</h3><p class="muted">Offer 2: the Transformation service, inside the same suite.</p></div>
+
+      <div class="shot">
+        <div class="scroll"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">crystalarc.iotx.app/transformation</span></div>
+          <div class="app"><div class="rail"><div class="logo">IOTx</div><span>Home</span><span>Store</span><div class="gap"></div><span class="on">Admin</span></div>
+            <div class="main"><div class="top"><span class="title">Transformation with IOTx</span><span class="sp"></span><span class="btn">Start a new request</span></div>
+              <div class="card"><div class="b">Order-to-dispatch system</div><div class="sm">Orders, production planning, yard, loading, invoicing and Tally sync · IOTx lead: Karan</div>
+                <div class="g4" style="margin-top:8px"><div><span class="pill g">Done</span><div class="sm">Discovery workshop</div></div><div><span class="pill g">Done</span><div class="sm">Design approved</div></div><div><span class="pill o">In progress</span><div class="sm">Build · 60%</div><div class="bar"><b style="width:60%"></b></div></div><div><span class="pill">Next</span><div class="sm">Training and go-live</div></div></div></div>
+              <div class="g2"><div class="card"><b>Latest update</b><div class="sm" style="margin-top:4px">Yard module ready to try. Test it with Plant 2 this week and leave comments on any screen.</div><span class="btn ghost" style="margin-top:6px">Try it</span></div><div class="card"><b>After go-live</b><div class="sm" style="margin-top:4px">The system appears in your Store. Your builders can keep extending it by chatting; IOTx stays on call.</div></div></div></div></div></div></div>
+        <div class="cap"><div class="num">F1</div><h3>Transformation projects</h3><dl><dt>What it's for</dt><dd>Asking the IOTx team for the big systems, and following their progress in the same place.</dd><dt>What you can do</dt><dd>Describe what you need, track the project's stages, try finished parts and comment on them. At go-live the system lands in the company Store, and the client's builders can keep extending it.</dd><dt>Who sees it</dt><dd>Owner, admins and the people they invite.</dd></dl></div>
+      </div>
+    </div>
+
+    <p class="note">Screens show illustrative data for an example company. Module names follow the IOTx brief: apps builder, docs, sheets, slides, store, AI chat, mails, meetings, calendar, files, notes, tasks, read and add new.</p>
+  </section>
+</div>

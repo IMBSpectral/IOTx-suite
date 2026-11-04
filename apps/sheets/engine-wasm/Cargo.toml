@@ -1,0 +1,27 @@
+[package]
+name = "sheets-engine"
+description = "Spectral Sheets calculation engine: the IMB Gridly session exposed to a browser Web Worker"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+# Member of the apps/sheets workspace. gridcraft is consumed read-only by path.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+imbgridly-engine = { path = "../../../suite/gridcraft/crates/engine" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "=0.2.129"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"

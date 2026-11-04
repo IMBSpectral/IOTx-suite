@@ -1,0 +1,541 @@
+[
+ {
+  "name": "@anthropic-ai/sdk",
+  "version": "0.135.0",
+  "license": "MIT",
+  "url": "github:anthropics/anthropic-sdk-typescript",
+  "apps": [
+   "Suite",
+   "Workspace"
+  ]
+ },
+ {
+  "name": "@auth/prisma-adapter",
+  "version": "2.11.3",
+  "license": "ISC",
+  "url": "https://authjs.dev/reference/adapter/prisma",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "@codemirror/autocomplete",
+  "version": "6.20.4",
+  "license": "MIT",
+  "url": "https://code.haverbeke.berlin/codemirror/autocomplete",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "@codemirror/commands",
+  "version": "6.11.1",
+  "license": "MIT",
+  "url": "https://code.haverbeke.berlin/codemirror/commands",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "@codemirror/lang-css",
+  "version": "6.3.1",
+  "license": "MIT",
+  "url": "https://github.com/codemirror/lang-css",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "@codemirror/lang-html",
+  "version": "6.4.12",
+  "license": "MIT",
+  "url": "https://code.haverbeke.berlin/codemirror/lang-html",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "@codemirror/lang-javascript",
+  "version": "6.2.5",
+  "license": "MIT",
+  "url": "https://github.com/codemirror/lang-javascript",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "@codemirror/lang-json",
+  "version": "6.0.2",
+  "license": "MIT",
+  "url": "https://github.com/codemirror/lang-json",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "@codemirror/lang-markdown",
+  "version": "6.5.2",
+  "license": "MIT",
+  "url": "https://code.haverbeke.berlin/codemirror/lang-markdown",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "@codemirror/lang-sql",
+  "version": "6.10.0",
+  "license": "MIT",
+  "url": "https://github.com/codemirror/lang-sql",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "@codemirror/language",
+  "version": "6.13.1",
+  "license": "MIT",
+  "url": "https://code.haverbeke.berlin/codemirror/language",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "@codemirror/merge",
+  "version": "6.12.3",
+  "license": "MIT",
+  "url": "https://code.haverbeke.berlin/codemirror/merge",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "@codemirror/search",
+  "version": "6.7.2",
+  "license": "MIT",
+  "url": "https://code.haverbeke.berlin/codemirror/search",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "@codemirror/state",
+  "version": "6.7.6",
+  "license": "MIT",
+  "url": "https://code.haverbeke.berlin/codemirror/state",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "@codemirror/view",
+  "version": "6.43.15",
+  "license": "MIT",
+  "url": "https://code.haverbeke.berlin/codemirror/view",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "@lezer/highlight",
+  "version": "1.2.5",
+  "license": "MIT",
+  "url": "https://code.haverbeke.berlin/lezer/highlight",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "@livekit/components-react",
+  "version": "2.9.24",
+  "license": "Apache-2.0",
+  "url": "https://github.com/livekit/components-js",
+  "apps": [
+   "Workspace"
+  ]
+ },
+ {
+  "name": "@livekit/components-styles",
+  "version": "1.2.0",
+  "license": "Apache-2.0",
+  "url": "https://github.com/livekit/components-js",
+  "apps": [
+   "Workspace"
+  ]
+ },
+ {
+  "name": "@livekit/track-processors",
+  "version": "0.8.2",
+  "license": "Apache-2.0",
+  "url": "https://github.com/livekit/track-processors-js",
+  "apps": [
+   "Workspace"
+  ]
+ },
+ {
+  "name": "@node-saml/node-saml",
+  "version": "5.2.0",
+  "license": "MIT",
+  "url": "https://github.com/node-saml/node-saml",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "@prisma/adapter-pg",
+  "version": "7.10.1",
+  "license": "Apache-2.0",
+  "url": "https://github.com/prisma/orm",
+  "apps": [
+   "Suite",
+   "Workspace"
+  ]
+ },
+ {
+  "name": "@prisma/client",
+  "version": "7.10.1",
+  "license": "Apache-2.0",
+  "url": "https://www.prisma.io",
+  "apps": [
+   "Suite",
+   "Workspace"
+  ]
+ },
+ {
+  "name": "@replit/codemirror-indentation-markers",
+  "version": "6.5.3",
+  "license": "MIT",
+  "url": "https://github.com/replit/codemirror-indentation-markers",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "@sapphi-red/web-noise-suppressor",
+  "version": "0.4.1",
+  "license": "MIT",
+  "url": "https://github.com/sapphi-red/web-noise-suppressor#readme",
+  "apps": [
+   "Workspace"
+  ]
+ },
+ {
+  "name": "@xterm/addon-fit",
+  "version": "0.10.0",
+  "license": "MIT",
+  "url": "https://github.com/xtermjs/xterm.js/tree/master/addons/addon-fit",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "@xterm/xterm",
+  "version": "5.5.0",
+  "license": "MIT",
+  "url": "https://github.com/xtermjs/xterm.js",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "clsx",
+  "version": "2.1.1",
+  "license": "MIT",
+  "url": "lukeed/clsx",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "date-fns",
+  "version": "4.4.0",
+  "license": "MIT",
+  "url": "https://github.com/date-fns/date-fns",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "diff",
+  "version": "9.0.0",
+  "license": "BSD-3-Clause",
+  "url": "https://github.com/kpdecker/jsdiff",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "dotenv",
+  "version": "16.6.1",
+  "license": "BSD-2-Clause",
+  "url": "https://github.com/motdotla/dotenv#readme",
+  "apps": [
+   "Workspace"
+  ]
+ },
+ {
+  "name": "esbuild",
+  "version": "0.28.2",
+  "license": "MIT",
+  "url": "https://github.com/evanw/esbuild",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "ffmpeg-static",
+  "version": "5.3.0",
+  "license": "GPL-3.0-or-later",
+  "url": "https://github.com/eugeneware/ffmpeg-static",
+  "apps": [
+   "Workspace"
+  ]
+ },
+ {
+  "name": "imapflow",
+  "version": "1.0.191",
+  "license": "MIT",
+  "url": "https://imapflow.com/",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "isomorphic-git",
+  "version": "1.44.3",
+  "license": "MIT",
+  "url": "https://isomorphic-git.org/",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "jose",
+  "version": "6.2.13",
+  "license": "MIT",
+  "url": "https://github.com/panva/jose",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "jszip",
+  "version": "3.10.2",
+  "license": "(MIT OR GPL-3.0-or-later)",
+  "url": "https://github.com/Stuk/jszip",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "livekit-client",
+  "version": "2.22.4",
+  "license": "Apache-2.0",
+  "url": "git@github.com:livekit/client-sdk-js",
+  "apps": [
+   "Workspace"
+  ]
+ },
+ {
+  "name": "livekit-server-sdk",
+  "version": "2.19.1",
+  "license": "Apache-2.0",
+  "url": "https://github.com/livekit/node-sdks",
+  "apps": [
+   "Workspace"
+  ]
+ },
+ {
+  "name": "lucide-react",
+  "version": "1.60.0",
+  "license": "ISC",
+  "url": "https://lucide.dev",
+  "apps": [
+   "Suite",
+   "Workspace"
+  ]
+ },
+ {
+  "name": "mailparser",
+  "version": "3.7.4",
+  "license": "MIT",
+  "url": "https://github.com/nodemailer/mailparser",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "nanoid",
+  "version": "6.0.2",
+  "license": "MIT",
+  "url": "ai/nanoid",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "next",
+  "version": "16.4.2",
+  "license": "MIT",
+  "url": "https://nextjs.org",
+  "apps": [
+   "Suite",
+   "Workspace"
+  ]
+ },
+ {
+  "name": "next-auth",
+  "version": "5.0.0-beta.32",
+  "license": "ISC",
+  "url": "https://nextjs.authjs.dev",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "nodemailer",
+  "version": "7.0.13",
+  "license": "MIT-0",
+  "url": "https://nodemailer.com/",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "pg",
+  "version": "8.23.1",
+  "license": "MIT",
+  "url": "https://github.com/brianc/node-postgres",
+  "apps": [
+   "Suite",
+   "Workspace"
+  ]
+ },
+ {
+  "name": "playwright-core",
+  "version": "1.49.1",
+  "license": "Apache-2.0",
+  "url": "https://playwright.dev",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "prettier",
+  "version": "3.9.10",
+  "license": "MIT",
+  "url": "https://prettier.io",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "qrcode",
+  "version": "1.5.4",
+  "license": "MIT",
+  "url": "http://github.com/soldair/node-qrcode",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "react",
+  "version": "19.3.0",
+  "license": "MIT",
+  "url": "https://react.dev/",
+  "apps": [
+   "Suite",
+   "Workspace"
+  ]
+ },
+ {
+  "name": "react-dom",
+  "version": "19.3.0",
+  "license": "MIT",
+  "url": "https://react.dev/",
+  "apps": [
+   "Suite",
+   "Workspace"
+  ]
+ },
+ {
+  "name": "react-markdown",
+  "version": "9.0.1",
+  "license": "MIT",
+  "url": "remarkjs/react-markdown",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "remark-gfm",
+  "version": "4.0.0",
+  "license": "MIT",
+  "url": "remarkjs/remark-gfm",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "sanitize-html",
+  "version": "2.17.0",
+  "license": "MIT",
+  "url": "https://github.com/apostrophecms/sanitize-html",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "sharp",
+  "version": "0.35.5",
+  "license": "Apache-2.0",
+  "url": "https://sharp.pixelplumbing.com",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "tailwind-merge",
+  "version": "3.7.0",
+  "license": "MIT",
+  "url": "https://github.com/dcastil/tailwind-merge",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "tslib",
+  "version": "2.8.1",
+  "license": "0BSD",
+  "url": "https://www.typescriptlang.org/",
+  "apps": [
+   "Workspace"
+  ]
+ },
+ {
+  "name": "unpdf",
+  "version": "1.6.2",
+  "license": "MIT",
+  "url": "https://github.com/unjs/unpdf#readme",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "yaml",
+  "version": "2.9.1",
+  "license": "ISC",
+  "url": "https://eemeli.org/yaml/",
+  "apps": [
+   "Suite"
+  ]
+ },
+ {
+  "name": "zod",
+  "version": "4.6.7",
+  "license": "MIT",
+  "url": "https://zod.dev",
+  "apps": [
+   "Suite"
+  ]
+ }
+]

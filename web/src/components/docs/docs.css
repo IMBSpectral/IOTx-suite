@@ -1,0 +1,71 @@
+/*
+ * Docs editor. The chrome uses the Sheets editor's classes (sheets.css,
+ * following the suite theme and the ink-violet Docs accent); the page stays
+ * white in every theme, floating on a dotted drafting canvas.
+ */
+.dx-main { flex: 1; min-height: 0; display: flex; position: relative; }
+.dx-canvas { flex: 1; min-width: 0; overflow: auto; padding: 20px 0 56px; overscroll-behavior: contain;
+  background: radial-gradient(circle, color-mix(in srgb, var(--ox) 22%, transparent) 1px, transparent 1.4px) 0 0 / 22px 22px, #f5f5fa; }
+:root[data-theme="dark"] .dx-canvas { background: radial-gradient(circle, color-mix(in srgb, var(--ox) 30%, transparent) 1px, transparent 1.4px) 0 0 / 22px 22px, #12131f; }
+.dx-zoom { margin: 0 auto; width: max-content; }
+.dx-page { background: #fff; color: #000; border-radius: 6px; box-shadow: 0 0 0 1px rgba(30,32,60,.06), 0 2px 4px rgba(30,32,60,.05), 0 18px 48px -18px color-mix(in srgb, var(--ox) 45%, rgba(30,32,60,.4)); position: relative; box-sizing: border-box; font: 11pt Arial, sans-serif; line-height: 1.32; }
+.dx-body { outline: none; white-space: pre-wrap; overflow-wrap: break-word; tab-size: 48px; caret-color: #000; min-height: 200px; }
+.dx-body[contenteditable="false"] { caret-color: transparent; }
+.dx-body p, .dx-body h1, .dx-body h2, .dx-body h3, .dx-body h4, .dx-body h5, .dx-body h6, .dx-hf p, .dx-hf h1, .dx-hf h2, .dx-hf h3 { margin: 0; position: relative; font-weight: 400; }
+.dx-p { min-height: 1em; }
+.dx-ns-TITLE { font-size: 26pt; }
+.dx-ns-SUBTITLE { font-size: 15pt; color: #666; }
+.dx-body h1, .dx-hf h1 { font-size: 20pt; }
+.dx-body h2, .dx-hf h2 { font-size: 16pt; }
+.dx-body h3, .dx-hf h3 { font-size: 14pt; color: #434343; }
+.dx-body h4 { font-size: 12pt; color: #666; }
+.dx-body h5 { font-size: 11pt; color: #666; }
+.dx-body h6 { font-size: 11pt; color: #666; font-style: italic; }
+.dx-bullet { position: absolute; top: 0; user-select: none; -webkit-user-select: none; white-space: pre; }
+.dx-check { cursor: pointer; font-size: 1.1em; line-height: 1.15; }
+.dx-link { cursor: text; }
+.dx-sug-i { color: var(--ox); text-decoration: underline; text-decoration-color: var(--ox); background: rgba(24,128,56,.06); }
+.dx-sug-d { color: #b31412; text-decoration: line-through; background: rgba(179,20,18,.05); }
+.dx-ro { opacity: .92; }
+.dx-io { display: inline-block; vertical-align: bottom; line-height: 0; position: relative; }
+.dx-io img { max-width: 100%; height: auto; }
+.dx-io.sel { outline: 2px solid var(--ox); outline-offset: 1px; }
+.dx-chip { display: inline-block; line-height: 1.4; border-radius: 12px; padding: 0 8px; background: #eef0f6; color: #2e3150; font-size: .92em; user-select: none; -webkit-user-select: none; }
+.dx-fn { vertical-align: super; font-size: .66em; color: var(--ox-ink); }
+.dx-hr { display: block; border-top: 1px solid #dde0ea; margin: 8px 0; height: 0; }
+.dx-pb { display: block; height: 22px; margin: 18px calc(-1 * var(--dx-ml, 96px)) 18px calc(-1 * var(--dx-mr, 96px)); background: #f5f5fa; border-top: 1px dashed color-mix(in srgb, var(--ox) 35%, transparent); box-shadow: inset 0 6px 6px -6px rgba(30,32,60,.35), inset 0 -6px 6px -6px rgba(30,32,60,.35); }
+:root[data-theme="dark"] .dx-pb { background: #12131f; }
+.dx-table { border-collapse: collapse; width: 100%; margin: 0; table-layout: fixed; }
+.dx-table td { border: 1px solid #000; padding: 5pt; vertical-align: top; min-width: 20px; }
+.dx-hf { color: #444; white-space: pre-wrap; position: relative; }
+.dx-hf:hover { outline: 1px dashed #dde0ea; }
+.dx-hf-tag { position: absolute; right: 0; top: -2px; font: 11px Arial, sans-serif; color: #6a6e8a; background: #fff; padding: 0 4px; opacity: 0; transition: opacity .15s; }
+.dx-hf:hover .dx-hf-tag { opacity: 1; }
+.dx-outline { width: 230px; flex: none; overflow-y: auto; padding: 18px 8px 18px 16px; font-size: 13px; color: var(--ix-ink); background: var(--ix-bg); }
+.dx-outline h2 { font-size: 12px; font-weight: 600; color: var(--ix-muted); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 8px 6px; display: flex; align-items: center; gap: 6px; }
+.dx-outline button.o { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 4px 6px; border-radius: 6px; cursor: pointer; color: var(--ix-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.dx-outline button.o:hover { background: var(--ix-hover); }
+.dx-outline button.o.on { color: var(--ox-ink); font-weight: 600; background: var(--ox-soft); box-shadow: inset 3px 0 0 var(--ox); }
+:root[data-theme="dark"] .dx-outline button.o.on { color: var(--ox-ink); }
+.dx-side { width: 300px; flex: none; overflow-y: auto; border-left: 1px solid var(--ix-line); background: var(--ix-panel); padding: 14px; font-size: 13px; }
+.dx-comment { border: 1px solid var(--ix-line); border-radius: 12px; padding: 10px; margin-bottom: 10px; }
+.dx-comment q { display: block; border-left: 3px solid var(--ox); padding-left: 8px; color: var(--ix-muted); margin: 4px 0 6px; quotes: none; }
+.dx-count { position: absolute; left: 12px; bottom: 10px; z-index: 5; border: 1px solid color-mix(in srgb, var(--ox) 25%, var(--ix-line)); background: var(--ix-panel); border-radius: 10px; padding: 3px 12px; font-size: 12px; color: var(--ix-muted); cursor: pointer; }
+.dx-bubble { position: fixed; z-index: 65; display: flex; align-items: center; gap: 4px; padding: 6px 8px; background: var(--ix-panel); border: 1px solid var(--ix-line); border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,.15), 0 6px 18px rgba(0,0,0,.12); font-size: 13px; max-width: min(420px, calc(100vw - 24px)); }
+.dx-bubble a { color: var(--ox-ink); text-decoration: underline; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
+.dx-find { background: color-mix(in srgb, #facc15 55%, transparent); }
+.dx-tgrid { display: grid; grid-template-columns: repeat(10, 18px); gap: 3px; }
+.dx-tgrid button { width: 18px; height: 18px; border: 1px solid #dde0ea; background: #fff; padding: 0; cursor: pointer; border-radius: 2px; }
+.dx-tgrid button.on { background: var(--ox-soft); border-color: var(--ox); }
+.dx-lock { position: absolute; inset: 0; z-index: 4; cursor: progress; }
+@media print {
+  .dx-canvas { background: #fff; padding: 0; }
+}
+@media (max-width: 640px) {
+  .dx-outline, .dx-side { display: none; }
+  .dx-canvas { padding: 0; background: #fff; }
+  .dx-zoom { width: 100%; zoom: 1 !important; }
+  .dx-page { width: 100% !important; min-height: 0 !important; padding: 16px !important; box-shadow: none; }
+  .dx-pb { margin-left: -16px; margin-right: -16px; }
+  .dx-count { display: none; }
+}

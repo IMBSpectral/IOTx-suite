@@ -1,0 +1,9 @@
+node_modules
+.next
+.env
+.logs
+next-env.d.ts
+tsconfig.tsbuildinfo
+livekit/livekit.yaml
+livekit/egress.yaml
+storage/

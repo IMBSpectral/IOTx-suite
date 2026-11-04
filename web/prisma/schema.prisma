@@ -1,0 +1,1598 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------- Identity ----------
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  handle        String?   @unique
+  image         String?
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+  // Privacy: whether Forge may use this person's projects to improve its
+  // models (off unless they opt in), and a pending account deletion.
+  improveForge        Boolean   @default(false)
+  deletionScheduledAt DateTime?
+  // Account preferences: follow-up suggestions after every reply or only the
+  // first, and whether support may read the preview sandbox's diagnostics.
+  suggestions         String    @default("all")
+  sandboxDiagnostics  Boolean   @default(false)
+  // Public profile at /@handle: shown or hidden, plus a LinkedIn link.
+  profilePublic       Boolean   @default(true)
+  linkedinUrl         String?
+  // IOTx Suite appearance, saved to the account so it follows the person to
+  // every device: light | dark | system, a preset accent (indigo, ember, teal,
+  // graphite) or "custom" with accentCustom (#rrggbb), and the shell
+  // background ({ kind: none|color|image, color, image, dim, blur }).
+  theme               String    @default("system")
+  accent              String    @default("indigo")
+  accentCustom        String?
+  shellBg             Json?
+  // Two-step verification: sealed TOTP secret, when it was turned on, hashed recovery codes.
+  mfaSecret           Json?
+  mfaEnabledAt        DateTime?
+  mfaRecovery         Json?
+
+  accounts    Account[]
+  sessions    Session[]
+  memberships Membership[]
+  messages    Message[]
+  stars       Star[]
+  notifications Notification[]
+  visits      ProjectVisit[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  /// When this session passed two-step verification (null: not yet, or not needed).
+  mfaAt        DateTime?
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ---------- Tenancy ----------
+// Billing hangs off Workspace, never User. Mirrors the observed API.
+
+enum Plan {
+  FREE
+  PRO
+  BUSINESS
+  ENTERPRISE
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  plan      Plan     @default(FREE)
+  createdAt DateTime @default(now())
+
+  // Credits: balance is authoritative; ledger explains it.
+  creditBalance  Int     @default(30)
+  monthlyCredits Int     @default(30)
+  autoTopupOn    Boolean @default(false)
+  autoTopupLimit Int     @default(0)
+
+  // Billing period: monthly credits refill when it ends. On paid plans unused
+  // monthly credits roll over for one more period, then expire.
+  periodStart       DateTime  @default(now())
+  rolloverCredits   Int       @default(0)
+  rolloverExpiresAt DateTime?
+  // When an admin accepted the terms for metered (pay-as-you-go) usage.
+  meteredTermsAt    DateTime?
+  // Set when the balance reaches zero; after a grace period the workspace's
+  // live apps pause their backends until credits are added.
+  outOfCreditsAt    DateTime?
+
+  // Security: the weekly digest, and workspace-wide scan rules
+  // ({ disabledChecks: string[], blockPublishOn: "critical" | "high" | "off" }).
+  securityDigest   Boolean   @default(true)
+  securityDigestAt DateTime?
+  securityRules    Json?
+  // Email domains the workspace proved it owns ([{ domain, token, verifiedAt }]);
+  // invites can be limited to them. Preview links: "anyone" (default),
+  // "password" (every link needs a password) or "off".
+  verifiedDomains    Json?
+  inviteVerifiedOnly Boolean @default(false)
+  previewSharing     String  @default("anyone")
+  /// The agent may turn on Forge Cloud and apply database changes without an approval card (as on Lovable).
+  cloudAutoApprove   Boolean @default(true)
+  // Workspace claims: people whose email is on a verified domain can
+  // "off" not join, "request" ask to join, or "auto" join as members.
+  domainJoin         String  @default("off")
+  // When someone last asked about an enterprise plan ("Contact sales").
+  salesRequestedAt   DateTime?
+
+  memberships Membership[]
+  projects    Project[]
+  ledger      CreditEntry[]
+  connectors  Connector[]
+  folders     Folder[]
+  spendLimits SpendLimit[]
+  // The organization this workspace belongs to (lib/orgs.ts), if any.
+  orgId       String?
+  org         Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
+  // App tiering rules in YAML (see lib/tiering.ts); null means no tiers.
+  tieringYaml String?   @db.Text
+  apiKeys     ApiKey[]
+
+  // Spending limit per calendar month, in credits. Null means no limit.
+  monthlySpendLimit Int?
+  // Governance: members publish only with an admin's approval.
+  publishRequiresApproval Boolean @default(false)
+  // Whether people outside the workspace can be invited to its projects.
+  allowExternalCollaborators Boolean @default(true)
+
+  @@map("workspaces")
+}
+
+model Membership {
+  id          String    @id @default(cuid())
+  userId      String
+  workspaceId String
+  role        Role      @default(MEMBER)
+  createdAt   DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@map("memberships")
+}
+
+enum CreditReason {
+  MONTHLY_GRANT
+  GENERATION
+  TOPUP
+  REFERRAL
+  REFUND
+  EXPIRED
+  BONUS
+}
+
+model CreditEntry {
+  id          String       @id @default(cuid())
+  workspaceId String
+  delta       Int
+  reason      CreditReason
+  messageId   String?
+  createdAt   DateTime     @default(now())
+  // Usage breakdown: build | chat | media | cloud, and who spent it where.
+  category    String?
+  userId      String?
+  projectId   String?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("credit_entries")
+}
+
+// ---------- Projects ----------
+
+enum Visibility {
+  PRIVATE
+  UNLISTED
+  PUBLIC
+}
+
+model Project {
+  id          String     @id @default(uuid())
+  workspaceId String
+  name        String
+  slug        String
+  description String?
+  visibility  Visibility @default(PRIVATE)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Head commit of the project's git repo. Source of truth is on disk.
+  headSha String?
+
+  // Publishing
+  publishedAt     DateTime?
+  publishedSha    String?
+  customDomain    String?   @unique
+  subdomain       String    @unique
+
+  // Who created it, for the "Created by me" filter.
+  createdById String?
+  // Presentation and organisation
+  emoji       String?
+  notes       String?   @db.Text
+  isTemplate  Boolean   @default(false)
+  // The template's gallery profile: tagline, about, category, icon, publisher type, hidePreview.
+  listing     Json?
+  folderId    String?
+  // Soft delete: restorable from "Recently deleted" until purged.
+  deletedAt   DateTime?
+  // The message queue can be paused without losing what is queued.
+  queuePaused Boolean   @default(false)
+  // The agent's task list for this project (roadmap panel).
+  tasks       Json?
+
+  // Publishing: who can open the live site, whether it carries the badge,
+  // how it looks in search and social cards, and the last pre-publish checks.
+  // Security center: disabled check ids and the project's security notes.
+  securityConfig  Json?
+  publishAudience String    @default("public")
+  showBadge       Boolean   @default(true)
+  seo             Json?
+  lastChecks      Json?
+  // Set while a publish waits for an admin's approval.
+  publishRequestedAt   DateTime?
+  publishRequestedById String?
+  // Workspace admins' labels on the project (e.g. customer-facing, pci), used by tier rules.
+  adminLabels          String[]  @default([])
+
+  // Sharing: restricted projects are visible only to invited people (and
+  // workspace owners/admins). An invite link grants linkAccess to anyone
+  // signed in who opens it.
+  // What the project is: an app (default), a design system, a canvas, or a library.
+  kind                String  @default("app")
+  // An app's attached design system and the version installed in it.
+  designSystemId      String?
+  designSystemVersion Int?
+  // A design system's latest published version.
+  dsVersion           Int     @default(0)
+  // Monitoring: { on, frequency, runs[], ignored[], fixing{} } (see lib/monitoring.ts).
+  monitoring         Json?
+  restricted         Boolean @default(false)
+  linkAccess         String?
+  linkToken          String? @unique
+  allowGuestComments Boolean @default(false)
+  // Abandoned-project clean-up: protected projects are never removed; the
+  // notice date starts the grace period, "Keep it" resets it.
+  cleanupProtected   Boolean   @default(false)
+  abandonedNoticeAt  DateTime?
+  keptAt             DateTime?
+
+  previewLinks   PreviewLink[]
+  accessRequests AccessRequest[]
+  comments       Comment[]
+  messages Message[]
+  builds   Build[]
+  drafts   Draft[]
+  bookmarks Bookmark[]
+  visits    ProjectVisit[]
+  siteVisits SiteVisit[]
+  folder    Folder?   @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  stars    Star[]
+  collaborators Collaborator[]
+  findings SecurityFinding[]
+  knowledge Knowledge?
+  /// Company knowledge base for this project's agent: on | tags (only kbTags) | off.
+  kbMode String   @default("on")
+  kbTags String[] @default([])
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId, updatedAt])
+  @@map("projects")
+}
+
+model Collaborator {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  role      Role     @default(MEMBER)
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@map("collaborators")
+}
+
+model Star {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+  @@map("stars")
+}
+
+// ---------- Chat & generation ----------
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+enum BuildStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+model Message {
+  id        String      @id @default(cuid())
+  projectId String
+  userId    String?
+  role      MessageRole
+  content   String      @db.Text
+  mode      String      @default("build")
+  // Rendered tool activity (file writes) for replay in the UI.
+  steps     Json?
+  // "up" / "down" from the message actions.
+  feedback  String?
+  // Uploaded files sent with this message: [{ name, type, size, path }].
+  attachments Json?
+  createdAt DateTime    @default(now())
+  // Which of the project's chats this belongs to; null is the main chat.
+  chatId    String?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  build   Build?
+
+  @@index([projectId, createdAt])
+  @@index([chatId])
+  @@map("messages")
+}
+
+// A Build is the queued job. Generation outlives the HTTP request, so
+// progress is read from here rather than from the response stream.
+model Build {
+  id        String      @id @default(cuid())
+  projectId String
+  messageId String?     @unique
+  status    BuildStatus @default(QUEUED)
+  mode      String      @default("build")
+  // Goal runs: follow-up turns still allowed to work through the task list.
+  goalRemaining Int?
+  // Liveness: a RUNNING build whose heartbeat goes stale was orphaned by a
+  // worker that died, and must be reclaimed rather than stranded forever.
+  heartbeatAt DateTime?
+  attempts    Int       @default(0)
+  // Queue controls: a stop request is honoured between stream events, and
+  // queued builds run in queuePos order, then creation order.
+  cancelRequested Boolean @default(false)
+  queuePos    Int       @default(0)
+  // Set when the change this build made has been undone.
+  undone      Boolean   @default(false)
+  // Security fixes are not charged for, as on Lovable.
+  free        Boolean   @default(false)
+  // Started through a workspace API key (the Forge MCP server), for per-key limits.
+  apiKeyId    String?
+  error     String?     @db.Text
+  sha       String?
+  creditsUsed Int       @default(0)
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  startedAt DateTime?
+  endedAt   DateTime?
+  createdAt DateTime    @default(now())
+
+  draftId String?
+
+  project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  draft   Draft?   @relation(fields: [draftId], references: [id], onDelete: SetNull)
+  message Message? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  events  BuildEvent[]
+
+  @@index([status, createdAt])
+  @@map("builds")
+}
+
+// ---------- Safety gate before publish ----------
+
+enum Severity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model SecurityFinding {
+  id        String   @id @default(cuid())
+  projectId String
+  sha       String
+  rule      String
+  severity  Severity
+  file      String
+  line      Int?
+  detail    String   @db.Text
+  resolved  Boolean  @default(false)
+  // "Ignore with a reason": kept for the record, excluded from gates.
+  ignored      Boolean @default(false)
+  ignoreReason String?
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, resolved])
+  @@map("security_findings")
+}
+
+// ---------- Integrations ----------
+
+model Connector {
+  id          String   @id @default(cuid())
+  workspaceId String
+  kind        String
+  label       String
+  config      Json
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, kind, label])
+  @@map("connectors")
+}
+
+/// Who is currently looking at a project. Rows are heartbeats, not sessions:
+/// anything older than the liveness window is treated as gone, so a crashed
+/// tab cleans itself up without a disconnect handler.
+model Presence {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  name      String?
+  lastSeen  DateTime @default(now())
+
+  @@unique([projectId, userId])
+  @@index([projectId, lastSeen])
+  @@map("presence")
+}
+
+/// Persisted stream of a build's events. Writing them down is what makes a
+/// build survive a dropped connection: a reconnecting client replays from
+/// `seq` instead of losing the run.
+model BuildEvent {
+  id      String   @id @default(cuid())
+  buildId String
+  seq     Int
+  type    String
+  payload Json
+  at      DateTime @default(now())
+
+  build Build @relation(fields: [buildId], references: [id], onDelete: Cascade)
+
+  @@unique([buildId, seq])
+  @@index([buildId, seq])
+  @@map("build_events")
+}
+
+/// Per-project standing instructions handed to the agent on every turn.
+model Knowledge {
+  id        String   @id @default(cuid())
+  projectId String   @unique
+  content   String   @db.Text
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("knowledge")
+}
+
+/// A proposed set of changes, isolated on its own git branch.
+///
+/// Changes do not land on the project directly: the agent builds into a draft
+/// which is then reviewed and accepted, or reverted. Several drafts can exist
+/// at once, which is why the branch, base and merge commit are all recorded —
+/// reverting a merged draft needs the merge commit, not just the diff.
+model Draft {
+  id         String      @id @default(cuid())
+  projectId  String
+  name       String
+  branch     String
+  status     DraftStatus @default(BUILDING)
+  baseSha    String
+  headSha    String?
+  mergeSha   String?
+  authorId   String
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  mergedAt   DateTime?
+  revertedAt DateTime?
+  /// Who has seen this draft arrive, so unseen ones can be surfaced.
+  seenBy     String[]    @default([])
+  /// The preview of this draft uses its own Cloud database with example data.
+  ownBackend Boolean     @default(false)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  builds  Build[]
+
+  @@unique([projectId, branch])
+  @@index([projectId, status, createdAt])
+  @@map("drafts")
+}
+
+enum DraftStatus {
+  BUILDING
+  READY
+  MERGED
+  REVERTED
+  FAILED
+}
+
+/// A named point in a project's history, from "Bookmark in history".
+model Bookmark {
+  id          String   @id @default(cuid())
+  projectId   String
+  sha         String
+  name        String
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@map("bookmarks")
+}
+
+/// Dashboard folders; nest through parentId.
+model Folder {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  parentId    String?
+  createdAt   DateTime @default(now())
+
+  /// Restricted folders (and everything under them) are visible only to
+  /// workspace owners/admins, the folder's members and each project's invitees.
+  restricted  Boolean  @default(false)
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projects  Project[]
+  members   FolderMember[]
+  hides     FolderHide[]
+
+  @@index([workspaceId])
+  @@map("folders")
+}
+
+model FolderMember {
+  folderId  String
+  userId    String
+  createdAt DateTime @default(now())
+
+  folder Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+  @@id([folderId, userId])
+  @@map("folder_members")
+}
+
+/// A folder someone hid from their own lists.
+model FolderHide {
+  userId    String
+  folderId  String
+  createdAt DateTime @default(now())
+
+  folder Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+  @@id([userId, folderId])
+  @@map("folder_hides")
+}
+
+/// In-app notifications inbox.
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  projectId String?
+  kind      String
+  title     String
+  body      String?
+  href      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
+}
+
+/// Last time a user opened a project, for "Recently viewed".
+model ProjectVisit {
+  userId    String
+  projectId String
+  at        DateTime @default(now())
+  // Comments newer than this are unread for this person.
+  commentsReadAt DateTime?
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([userId, projectId])
+  @@index([userId, at])
+  @@map("project_visits")
+}
+
+/// Page views of a published site, per day — the data behind project analytics.
+model SiteVisit {
+  projectId String
+  day       String
+  count     Int     @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, day])
+  @@map("site_visits")
+}
+
+/** Named, expiring, optionally password-protected link to a project's preview. */
+model PreviewLink {
+  id            String    @id @default(cuid())
+  projectId     String
+  name          String
+  token         String    @unique
+  passwordHash  String?
+  expiresAt     DateTime?
+  allowComments Boolean   @default(false)
+  createdById   String
+  createdAt     DateTime  @default(now())
+  revokedAt     DateTime?
+  views         Int       @default(0)
+  lastViewedAt  DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@map("preview_links")
+}
+
+/** "Request access" (view) and "Request to edit" from someone without that access. */
+model AccessRequest {
+  id          String    @id @default(cuid())
+  projectId   String
+  userId      String
+  kind        String
+  message     String?
+  status      String    @default("PENDING")
+  createdAt   DateTime  @default(now())
+  decidedAt   DateTime?
+  decidedById String?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status])
+  @@map("access_requests")
+}
+
+/** Monthly credit cap for one member ("user") or one project ("project"). */
+model SpendLimit {
+  id          String   @id @default(cuid())
+  workspaceId String
+  scope       String
+  targetId    String
+  monthly     Int
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, scope, targetId])
+  @@map("spend_limits")
+}
+
+/**
+ * Comment threads pinned to preview elements. A thread is a root comment
+ * (parentId null) with replies. Guests leave comments through preview links.
+ */
+model Comment {
+  id            String    @id @default(cuid())
+  projectId     String
+  parentId      String?
+  authorId      String?
+  guestName     String?
+  previewLinkId String?
+  body          String    @db.Text
+  // Where it is pinned: a precise CSS path, plus a readable description.
+  locator       String?
+  selector      String?
+  elementText   String?
+  /// JPEG data URL of the element when the thread was started.
+  elementShot   String?   @db.Text
+  reactions     Json?
+  resolvedAt    DateTime?
+  resolvedById  String?
+  editedAt      DateTime?
+  createdAt     DateTime  @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@index([parentId])
+  @@map("comments")
+}
+
+/**
+ * Scheduled tasks: a prompt run against a project on a schedule. `schedule`
+ * is a 5-field cron expression, or "once:<ISO time>" for a one-off.
+ */
+model Automation {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  projectId    String
+  name         String
+  prompt       String    @db.Text
+  mode         String    @default("build")
+  schedule     String
+  timezone     String    @default("UTC")
+  status       String    @default("active")
+  pausedReason String?
+  nextRunAt    DateTime?
+  lastRunAt    DateTime?
+  lastBuildId  String?
+  lastResult   String?   @db.Text
+  failures     Int       @default(0)
+  runs         Int       @default(0)
+  createdById  String
+  createdAt    DateTime  @default(now())
+  // Secret for the webhook trigger (POST /api/hooks/automations/<token>); null when off.
+  webhookToken String?
+
+  @@index([status, nextRunAt])
+  @@index([webhookToken])
+  @@index([workspaceId])
+  @@map("automations")
+}
+
+/** The workspace assistant: chats not tied to one project. */
+model WorkspaceChat {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  title       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  messages WorkspaceChatMessage[]
+
+  @@index([userId, updatedAt])
+  @@map("workspace_chats")
+}
+
+model WorkspaceChatMessage {
+  id        String   @id @default(cuid())
+  chatId    String
+  role      String
+  content   String   @db.Text
+  steps     Json?
+  createdAt DateTime @default(now())
+
+  chat WorkspaceChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([chatId, createdAt])
+  @@map("workspace_chat_messages")
+}
+
+/** Security-relevant changes in a workspace, for the audit trail and the security digest. */
+model AuditEvent {
+  id          String   @id @default(cuid())
+  workspaceId String
+  actorId     String?
+  projectId   String?
+  kind        String
+  detail      String   @db.Text
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId, createdAt])
+  @@map("audit_events")
+}
+
+/**
+ * Signing in another device (the desktop app, a CLI): the device shows a
+ * short code, a signed-in person approves it in the browser, and the device
+ * receives its own session.
+ */
+model DeviceAuth {
+  id           String   @id @default(cuid())
+  deviceCode   String   @unique
+  userCode     String   @unique
+  clientName   String
+  status       String   @default("pending")
+  userId       String?
+  sessionToken String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@map("device_auths")
+}
+
+/** People who may open a non-public published site without access to the project itself. */
+model SiteViewer {
+  id        String   @id @default(cuid())
+  projectId String
+  email     String
+  addedById String?
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, email])
+  @@map("site_viewers")
+}
+
+/** Credits earned for actions ("Explore Forge. Earn bonuses."), claimed into a workspace once each. */
+model RewardClaim {
+  id          String   @id @default(cuid())
+  userId      String
+  rewardId    String
+  workspaceId String
+  credits     Int
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, rewardId])
+  @@map("reward_claims")
+}
+
+/** Answers to in-product surveys; one per person per survey (dismissing counts). */
+model SurveyResponse {
+  id        String   @id @default(cuid())
+  userId    String
+  surveyId  String
+  score     Int?
+  answer    String?  @db.Text
+  dismissed Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, surveyId])
+  @@map("survey_responses")
+}
+
+/** Extra chats in a project, each with its own conversation (the main chat has none). */
+model ProjectChat {
+  id          String   @id @default(cuid())
+  projectId   String
+  title       String
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([projectId, createdAt])
+  @@map("project_chats")
+}
+
+/** Projects a person hid from their own lists (others still see them). */
+model ProjectHide {
+  userId    String
+  projectId String
+  createdAt DateTime @default(now())
+
+  @@id([userId, projectId])
+  @@map("project_hides")
+}
+
+/**
+ * Workspace API keys: used by the Forge MCP server (and future API). Stored
+ * as a SHA-256 hash; the key itself is shown once. Scopes limit what a key
+ * can do, and an optional monthly credit limit caps builds it starts.
+ */
+model ApiKey {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  name         String
+  prefix       String
+  hash         String    @unique
+  scopes       String[]
+  monthlyLimit Int?
+  createdById  String
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+  revokedAt    DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("api_keys")
+}
+
+/**
+ * An organization: several workspaces under one set of admins, with
+ * "standardized" settings pushed down to every workspace; enforced keys can't
+ * be changed inside a workspace.
+ */
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  avatar    String?
+  settings  Json?
+  enforced  String[] @default([])
+  createdAt DateTime @default(now())
+
+  workspaces Workspace[]
+  members    OrgMember[]
+
+  @@map("organizations")
+}
+
+model OrgMember {
+  id        String   @id @default(cuid())
+  orgId     String
+  userId    String
+  role      String   @default("ADMIN")
+  createdAt DateTime @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+  @@map("org_members")
+}
+
+// ---------- IOTx Suite permissions (lib/iotx/permissions.ts) ----------
+
+/**
+ * A role in a workspace. Built-in roles (owner, admin, member, guest) are
+ * created on first use and each workspace membership maps onto one of them
+ * (OWNER, ADMIN, MEMBER, VIEWER). Templates and custom roles are assigned on
+ * top. `perms` maps feature keys (and "<app>.open" access switches) to
+ * true/false; a key missing from a built-in role falls back to that role's
+ * default in the manifests, so new features arrive with sensible defaults.
+ */
+model PermRole {
+  id          String   @id @default(cuid())
+  workspaceId String
+  key         String
+  name        String
+  description String?
+  /// builtin | template | custom
+  kind        String   @default("custom")
+  /// owner | admin | member | guest for built-in roles.
+  builtin     String?
+  /// The template a role was copied from, if any.
+  template    String?
+  perms       Json     @default("{}")
+  /// Numeric limits by key; a missing key means no limit.
+  limits      Json     @default("{}")
+  /// Data scopes by scope key (e.g. tally.company: "All companies").
+  scopes      Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assignments PermAssignment[]
+
+  @@unique([workspaceId, key])
+  @@index([workspaceId])
+  @@map("perm_roles")
+}
+
+/** A role given to a person or to a group (members-extra groups); permissions add up. */
+model PermAssignment {
+  id          String   @id @default(cuid())
+  workspaceId String
+  roleId      String
+  /// user | group
+  subjectType String
+  subjectId   String
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  role PermRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, subjectType, subjectId])
+  @@index([workspaceId, subjectType, subjectId])
+  @@map("perm_assignments")
+}
+
+/** A per-person exception: a deny (wins over every grant) or a grant, optionally expiring. */
+model PermOverride {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  key         String
+  /// deny | grant
+  effect      String
+  expiresAt   DateTime?
+  reason      String?
+  createdById String?
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId, userId])
+  @@map("perm_overrides")
+}
+
+/// A mailbox connected over IMAP/SMTP: a personal one (ownerId set) or a
+/// shared company one (ownerId null, used by the people in sharedWith).
+model Mailbox {
+  id          String        @id @default(cuid())
+  workspaceId String
+  ownerId     String?
+  email       String
+  displayName String?
+  provider    String        @default("custom")
+  /// "password": IMAP/SMTP with a password; "gmail": Sign in with Google (Gmail API over HTTPS, secret holds the sealed refresh token).
+  authType    String        @default("password")
+  imapHost    String
+  imapPort    Int           @default(993)
+  imapSecure  Boolean       @default(true)
+  smtpHost    String
+  smtpPort    Int           @default(465)
+  smtpSecure  Boolean       @default(true)
+  username    String
+  /// The password or app password, sealed (AES-256-GCM).
+  secret      Json
+  /// User ids who may use a shared mailbox.
+  sharedWith  Json?
+  status      String        @default("new")
+  lastError   String?
+  lastSyncAt  DateTime?
+  createdById String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  messages    MailMessage[]
+
+  @@unique([workspaceId, email])
+  @@index([workspaceId])
+  @@map("mailboxes")
+}
+
+/// A synced message header (body cached on first open).
+model MailMessage {
+  id             String   @id @default(cuid())
+  mailboxId      String
+  folder         String
+  uid            Int
+  /// The provider's own id (Gmail message id); IMAP mailboxes use uid.
+  remoteId       String?
+  messageId      String?
+  inReplyTo      String?
+  fromAddr       String
+  fromName       String?
+  to             Json
+  cc             Json?
+  subject        String
+  snippet        String?
+  date           DateTime
+  seen           Boolean  @default(false)
+  flagged        Boolean  @default(false)
+  hasAttachments Boolean  @default(false)
+  attachments    Json?
+  html           String?
+  text           String?
+  aiLabel        String?
+  aiSummary      String?
+  createdAt      DateTime @default(now())
+  mailbox        Mailbox  @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+
+  @@unique([mailboxId, folder, uid])
+  @@index([mailboxId, folder, date])
+  @@map("mail_messages")
+}
+
+/// A person's Google Drive connection (Docs, Sheets, Slides), separate from
+/// signing in with Google: it asks for Drive access and keeps a refresh token.
+model GoogleConnection {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  email        String
+  /// Sealed refresh token.
+  refresh      Json
+  accessToken  String?
+  expiresAt    DateTime?
+  scopes       String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("google_connections")
+}
+
+/// A Google Sheet an app reads as live data, read with the linking person's connection.
+model LinkedSheet {
+  id            String   @id @default(cuid())
+  projectId     String
+  spreadsheetId String
+  name          String
+  linkedById    String
+  createdAt     DateTime @default(now())
+
+  @@unique([projectId, spreadsheetId])
+  @@index([projectId])
+  @@map("linked_sheets")
+}
+
+
+// ---------- Company knowledge base (the "Read" app) ----------
+
+/// A knowledge article: an SOP, policy, process, price list, glossary… Every AI in the suite searches these.
+model KbDoc {
+  id          String    @id @default(cuid())
+  workspaceId String
+  title       String
+  /// sop | policy | process | product | pricing | customer | vendor | glossary | faq | other
+  kind        String    @default("other")
+  /// Markdown.
+  body        String    @db.Text
+  tags        String[]  @default([])
+  /// manual | upload | learned
+  source      String    @default("manual")
+  fileName    String?
+  ownerId     String
+  /// Synced from a folder (KbSource): the file's id and modified time there.
+  sourceId    String?
+  externalId  String?
+  externalModified String?
+  /// everyone | members (no guests) | admins | roles (roleIds)
+  audience    String    @default("everyone")
+  roleIds     String[]  @default([])
+  /// draft | published | archived
+  status      String    @default("published")
+  version     Int       @default(1)
+  /// Flag as stale when not reviewed for this many days (null = never).
+  reviewEveryDays Int?
+  reviewedAt  DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  chunks      KbChunk[]
+  versions    KbVersion[]
+
+  @@index([workspaceId, status])
+  @@map("kb_docs")
+}
+
+/// A Google Drive folder whose files are kept in the knowledge base (re-read every 30 minutes).
+model KbSource {
+  id          String    @id @default(cuid())
+  workspaceId String
+  /// Whose Google connection reads the folder.
+  userId      String
+  folderId    String
+  folderName  String
+  kind        String    @default("other")
+  tags        String[]  @default([])
+  audience    String    @default("everyone")
+  lastSyncAt  DateTime?
+  lastError   String?
+  fileCount   Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  @@unique([workspaceId, folderId])
+  @@map("kb_sources")
+}
+
+/// A searchable passage of an article (split at headings).
+model KbChunk {
+  id          String @id @default(cuid())
+  docId       String
+  doc         KbDoc  @relation(fields: [docId], references: [id], onDelete: Cascade)
+  workspaceId String
+  seq         Int
+  heading     String @default("")
+  text        String @db.Text
+
+  @@index([workspaceId])
+  @@index([docId])
+  @@map("kb_chunks")
+}
+
+/// Earlier versions of an article, for history and restore.
+model KbVersion {
+  id        String   @id @default(cuid())
+  docId     String
+  doc       KbDoc    @relation(fields: [docId], references: [id], onDelete: Cascade)
+  version   Int
+  title     String
+  body      String   @db.Text
+  editedBy  String
+  note      String   @default("")
+  createdAt DateTime @default(now())
+
+  @@unique([docId, version])
+  @@map("kb_versions")
+}
+
+/// A proposed change to the knowledge base, waiting for a reviewer. AI learning only ever lands here first.
+model KbSuggestion {
+  id          String    @id @default(cuid())
+  workspaceId String
+  /// The article it changes (null = a new article).
+  docId       String?
+  /// new | append | replace
+  mode        String    @default("new")
+  title       String
+  body        String    @db.Text
+  reason      String    @default("")
+  /// builder | assistant | person
+  source      String    @default("person")
+  /// Where it came from, e.g. a project id.
+  sourceRef   String?
+  createdBy   String?
+  /// pending | approved | rejected
+  status      String    @default("pending")
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId, status])
+  @@map("kb_suggestions")
+}
+
+/// Questions the knowledge base had no answer for (to show what to write next).
+model KbGap {
+  id          String   @id @default(cuid())
+  workspaceId String
+  question    String
+  count       Int      @default(1)
+  lastAt      DateTime @default(now())
+  resolved    Boolean  @default(false)
+
+  @@unique([workspaceId, question])
+  @@map("kb_gaps")
+}
+
+/// A dashboard or a folder in the suite's sidebar ("Dashboards" / "Folders").
+/// Who sees it is set in Admin → Roles (per role) and by sharing with people;
+/// the apps inside a dashboard keep their own access rules.
+model SuiteSpace {
+  id          String   @id @default(cuid())
+  workspaceId String
+  /// dashboard | folder
+  kind        String
+  name        String
+  /// Folders nest; dashboards sit at the top level or inside a folder.
+  parentId    String?
+  icon        String?
+  order       Int      @default(0)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items  SuiteSpaceItem[]
+  access SuiteSpaceAccess[]
+
+  @@index([workspaceId, kind])
+  @@map("suite_spaces")
+}
+
+/// Something kept in a dashboard (a module: an app built in the Builder) or in a folder (an app, a page or a link).
+model SuiteSpaceItem {
+  id          String   @id @default(cuid())
+  spaceId     String
+  /// project | link
+  kind        String
+  /// The project id, or the link's address.
+  ref         String
+  title       String
+  order       Int      @default(0)
+  addedById   String?
+  createdAt   DateTime @default(now())
+
+  space SuiteSpace @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, order])
+  @@map("suite_space_items")
+}
+
+/// Who may see a dashboard or folder: a role (Admin → Roles) or a person. Owners,
+/// people with "Manage all dashboards and folders" and its creator always see it.
+model SuiteSpaceAccess {
+  spaceId     String
+  /// role | user
+  subjectType String
+  subjectId   String
+  createdAt   DateTime @default(now())
+
+  space SuiteSpace @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@id([spaceId, subjectType, subjectId])
+  @@index([subjectType, subjectId])
+  @@map("suite_space_access")
+}
+
+/**
+ * What the suite's AI remembers about one person in one workspace: facts and
+ * preferences it was told, or learned from what they asked it to do. Read
+ * into every assistant turn; the person can see and remove them.
+ */
+model AssistantMemory {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  fact        String   @db.Text
+  /** "ai" (the assistant saved it) or "user" (typed in Settings). */
+  source      String   @default("ai")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId, userId, createdAt])
+  @@map("assistant_memories")
+}
+
+// Every Claude call (suite and Workspace), with the tokens Claude reported and the list-price cost.
+model AiUsage {
+  id               String   @id @default(cuid())
+  workspaceId      String?
+  userId           String?
+  projectId        String?
+  app              String   @default("suite")
+  feature          String
+  model            String
+  status           Int      @default(200)
+  inputTokens      Int      @default(0)
+  outputTokens     Int      @default(0)
+  cacheWriteTokens Int      @default(0)
+  cacheReadTokens  Int      @default(0)
+  webSearches      Int      @default(0)
+  costMicros       Int      @default(0)
+  ms               Int      @default(0)
+  requestId        String?
+  createdAt        DateTime @default(now())
+
+  @@index([workspaceId, createdAt])
+  @@index([createdAt])
+  @@map("ai_usage")
+}
+
+// ---------- Company structure: departments and employees ----------
+
+/** A department in the company tree (Company → Plant → Production → Shift A), with its head. */
+model Department {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  parentId    String?
+  headId      String?
+  color       String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@map("departments")
+}
+
+/** One person's place in the company: department, manager and HR details. */
+model EmployeeProfile {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  userId       String
+  departmentId String?
+  managerId    String?
+  title        String?
+  phone        String?
+  employeeCode String?
+  location     String?
+  joinedOn     DateTime?
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId, departmentId])
+  @@index([workspaceId, managerId])
+  @@map("employee_profiles")
+}
+
+/** Time off: asked by a person, decided by their manager (or department head, or an admin). */
+model LeaveRequest {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  userId       String
+  /// casual | sick | earned | wfh | unpaid | other
+  type         String
+  startDate    DateTime
+  endDate      DateTime
+  halfDay      Boolean   @default(false)
+  days         Float     @default(0)
+  reason       String?
+  /// pending | approved | rejected | cancelled
+  status       String    @default("pending")
+  approverId   String?
+  decidedById  String?
+  decidedAt    DateTime?
+  decisionNote String?
+  createdAt    DateTime  @default(now())
+
+  @@index([workspaceId, startDate])
+  @@index([workspaceId, userId])
+  @@index([workspaceId, approverId, status])
+  @@map("leave_requests")
+}
+
+/** People settings per workspace: yearly leave allowances, company holidays and weekly off days. */
+model PeopleSettings {
+  workspaceId    String   @id
+  /// { casual: 12, sick: 7, earned: 15 }: days a year; a type left out has no limit
+  leaveAllowance Json?
+  /// [{ date: "2026-11-08", name: "Diwali" }]
+  holidays       Json?
+  /// Weekdays off, 0 = Sunday … 6 = Saturday
+  weekOff        Json?
+  /// The working day: { start: "09:30", hours: 8, graceMin: 10 } (late after start + grace)
+  workHours      Json?
+  updatedAt      DateTime @updatedAt
+
+  @@map("people_settings")
+}
+
+/** Work time: one clock-in to clock-out stretch. */
+model WorkSession {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  startedAt   DateTime
+  endedAt     DateTime?
+  note        String?
+
+  @@index([workspaceId, userId, startedAt])
+  @@map("work_sessions")
+}
+
+/** A daily work report to the person's manager. */
+model WorkReport {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  date        DateTime
+  done        String
+  next        String?
+  blockers    String?
+  managerId   String?
+  seenAt      DateTime?
+  comment     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([workspaceId, userId, date])
+  @@index([workspaceId, managerId, date])
+  @@map("work_reports")
+}
+
+/** Every successful sign-in (for People → Login history and security reviews). */
+model LoginEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  provider  String
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@map("login_events")
+}
+
+// ---------- Data Hub: apps reading each other's data ----------
+
+/** A table or linked Google Sheet that an app's owner shares with other apps in the workspace (read-only). */
+model DataShare {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  /// Short name other apps use, unique in the workspace (e.g. "customers")
+  name            String
+  label           String
+  description     String?
+  sourceProjectId String
+  /// table | sheet
+  kind            String
+  /// The table name, or the spreadsheet id
+  ref             String
+  /// Any app in the workspace may connect (otherwise only apps the owner adds)
+  openToAll       Boolean  @default(false)
+  createdById     String
+  createdAt       DateTime @default(now())
+
+  grants DataGrant[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("data_shares")
+}
+
+/** An app allowed to read a share, with its own revocable read key. */
+model DataGrant {
+  id          String    @id @default(cuid())
+  shareId     String
+  projectId   String
+  key         String    @unique
+  createdById String
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+
+  share DataShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+
+  @@unique([shareId, projectId])
+  @@index([projectId])
+  @@map("data_grants")
+}
+
+// ---------- Files: company file storage ----------
+
+/** A file or folder in someone's Files. Bytes live on the server's disk (FILES_ROOT), named by storageKey. */
+model FileItem {
+  id          String    @id @default(cuid())
+  workspaceId String
+  ownerId     String
+  parentId    String?
+  /// file | folder
+  kind        String
+  name        String
+  size        BigInt    @default(0)
+  mime        String?
+  storageKey  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  trashedAt   DateTime?
+
+  shares FileShare[]
+
+  @@index([workspaceId, ownerId, parentId])
+  @@index([workspaceId, trashedAt])
+  @@map("file_items")
+}
+
+/** A file or folder shared with a person (view or edit), or as a link with an expiry. */
+model FileShare {
+  id        String    @id @default(cuid())
+  fileId    String
+  /// user | link
+  kind      String
+  userId    String?
+  canEdit   Boolean   @default(false)
+  token     String?   @unique
+  expiresAt DateTime?
+  createdBy String
+  createdAt DateTime  @default(now())
+
+  file FileItem @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([fileId])
+  @@index([userId])
+  @@map("file_shares")
+}
+
+/** Storage limits set by admins: the whole company (userId null) and per person. */
+model StorageQuota {
+  id          String  @id @default(cuid())
+  workspaceId String
+  /// null: the company's total; "*": the default for each person; otherwise one person
+  userId      String?
+  limitBytes  BigInt
+
+  @@unique([workspaceId, userId])
+  @@map("storage_quotas")
+}

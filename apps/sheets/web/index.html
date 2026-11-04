@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spectral Sheets</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="logo" aria-hidden="true"></span>
+          <input id="title" class="title" data-testid="title" aria-label="Workbook title" value="Untitled spreadsheet" />
+          <span id="status" class="status" data-testid="status"></span>
+          <nav id="menubar" class="menubar" data-testid="menubar"><!-- Built by src/ui/menubar.ts --></nav>
+        </div>
+        <div class="actions">
+          <div id="people" class="people" aria-label="People here"></div>
+          <button id="new" class="btn" data-testid="new" title="Start a new workbook">New</button>
+          <label class="btn" title="Open an .xlsx, .ods or .csv file">
+            Open<input id="open-file" type="file" accept=".xlsx,.xlsm,.xlsb,.ods,.csv,.tsv" hidden data-testid="open-file" />
+          </label>
+          <button id="download" class="btn" data-testid="download" title="Download as .xlsx">Download .xlsx</button>
+          <button id="share" class="btn primary" data-testid="share" title="Share a link that lets others edit with you">Share</button>
+        </div>
+      </header>
+      <nav class="toolbar" aria-label="Formatting" data-testid="toolbar"><!-- Built by src/ui/toolbar.ts --></nav>
+      <div class="formula-row">
+        <input id="namebox" class="namebox" data-testid="namebox" aria-label="Name box" value="A1" />
+        <span class="fx" aria-hidden="true">fx</span>
+        <input id="formula" class="formula" data-testid="formula" aria-label="Formula bar" spellcheck="false" />
+      </div>
+      <main id="grid" class="grid"></main>
+      <footer class="tabs">
+        <button id="add-sheet" class="add-sheet" title="Add sheet" aria-label="Add sheet" data-testid="add-sheet">+</button>
+        <div id="sheet-tabs" class="sheet-tabs" role="tablist"></div>
+        <span id="stats" class="stats" data-testid="stats"></span>
+      </footer>
+    </div>
+    <div id="dialogs"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

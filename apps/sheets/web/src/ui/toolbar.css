@@ -1,0 +1,488 @@
+/* Formatting toolbar, styled after Google Sheets' (Material 3) toolbar. */
+
+.toolbar {
+  --tb-icon: #444746;
+  --tb-hover: rgba(68, 71, 70, 0.08);
+  --tb-active: #d3e3fd;
+  --tb-active-icon: #041e49;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0;
+  min-height: 40px;
+  margin: 0 16px 4px;
+  padding: 0 8px;
+  background: #edf2fa;
+  border-radius: 24px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  white-space: nowrap;
+  color: var(--tb-icon);
+  font-family: "Google Sans", Roboto, Arial, Helvetica, sans-serif;
+}
+
+.toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+.toolbar .tb-group {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 1px;
+}
+
+.toolbar .tb-sep {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: #c7c7c7;
+}
+
+.toolbar .tb-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 2px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--tb-icon);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.toolbar .tb-btn:hover:not(:disabled) {
+  background: var(--tb-hover);
+}
+
+.toolbar .tb-btn[aria-pressed="true"],
+.toolbar .tb-btn[aria-expanded="true"] {
+  background: var(--tb-active);
+  color: var(--tb-active-icon);
+}
+
+.toolbar .tb-btn:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.toolbar .tb-btn:focus-visible,
+.tb-popover button:focus-visible {
+  outline: 2px solid #0b57d0;
+  outline-offset: -2px;
+}
+
+.toolbar .tb-text {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.toolbar .tb-glyph .tb-text {
+  font-size: 16px;
+}
+
+.toolbar .tb-123 {
+  font-size: 13px;
+  letter-spacing: 0.2px;
+}
+
+/* Icon + caret buttons. */
+.toolbar .tb-drop {
+  padding: 0 0 0 4px;
+  gap: 0;
+}
+
+.toolbar .tb-drop > svg {
+  margin-left: -3px;
+}
+
+.toolbar .tb-drop-body {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+}
+
+/* The font family box. */
+.toolbar .tb-font {
+  width: 108px;
+  justify-content: space-between;
+  padding-left: 8px;
+}
+
+.toolbar .tb-font .tb-drop-body {
+  overflow: hidden;
+  min-width: 0;
+}
+
+.toolbar .tb-font-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  color: #1f1f1f;
+}
+
+/* The font size box between − and +. */
+.toolbar .tb-size {
+  flex: none;
+  width: 34px;
+  height: 24px;
+  margin: 0 1px;
+  padding: 0;
+  border: 1px solid #747775;
+  border-radius: 4px;
+  background: transparent;
+  color: #1f1f1f;
+  font: inherit;
+  font-size: 14px;
+  text-align: center;
+}
+
+.toolbar .tb-size:hover {
+  background: var(--tb-hover);
+}
+
+.toolbar .tb-size:focus {
+  outline: 2px solid #0b57d0;
+  outline-offset: -1px;
+  background: #fff;
+}
+
+/* Colour buttons: the icon over a bar showing the current colour. */
+.toolbar .tb-color .tb-drop-body {
+  flex-direction: column;
+  height: 24px;
+  justify-content: center;
+}
+
+.toolbar .tb-color .tb-drop-body svg {
+  margin-bottom: -2px;
+}
+
+.toolbar .tb-bar,
+.tb-popover .tb-bar {
+  display: block;
+  width: 18px;
+  height: 4px;
+  border-radius: 1px;
+  background: var(--bar, #000);
+  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.25);
+}
+
+/* Merge: a button with its own caret, as one pill. */
+.toolbar .tb-split-main {
+  border-radius: 4px 0 0 4px;
+  padding-right: 0;
+}
+
+.toolbar .tb-split-caret {
+  min-width: 14px;
+  padding: 0;
+  margin-left: -1px;
+  border-radius: 0 4px 4px 0;
+}
+
+.toolbar .tb-split-caret > svg {
+  margin-left: 0;
+}
+
+/* Paint format armed: the sheet shows a paint cursor. */
+.tb-painting .grid-scroller {
+  cursor: copy !important;
+}
+
+/* ---------------------------------------------------------------- popovers */
+
+.tb-popover {
+  position: fixed;
+  z-index: 1000;
+  padding: 6px 0;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow:
+    0 1px 2px 0 rgba(60, 64, 67, 0.3),
+    0 2px 6px 2px rgba(60, 64, 67, 0.15);
+  color: #1f1f1f;
+  font-family: "Google Sans", Roboto, Arial, Helvetica, sans-serif;
+  font-size: 14px;
+}
+
+.tb-popover button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tb-menu {
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+}
+
+.tb-fonts {
+  min-width: 200px;
+}
+
+.tb-sizes {
+  min-width: 64px;
+}
+
+.tb-sizes .tb-item {
+  padding-right: 16px;
+}
+
+.tb-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 24px 0 8px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tb-item:hover {
+  background: #f1f3f4;
+}
+
+.tb-item-check {
+  display: inline-flex;
+  width: 20px;
+  flex: none;
+  color: #444746;
+}
+
+.tb-item-label {
+  flex: 1;
+}
+
+.tb-item-hint {
+  color: #5f6368;
+  font-size: 13px;
+  margin-left: 24px;
+}
+
+.tb-menu-sep {
+  height: 1px;
+  margin: 6px 0;
+  background: #e1e3e1;
+}
+
+.tb-custom {
+  padding: 4px 12px 6px;
+}
+
+.tb-custom-title {
+  color: #5f6368;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.tb-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.tb-field {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #747775;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 14px;
+}
+
+.tb-field:focus {
+  outline: 2px solid #0b57d0;
+  outline-offset: -2px;
+  border-color: transparent;
+}
+
+.tb-apply {
+  height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 16px;
+  background: #0b57d0;
+  color: #fff !important;
+  font-weight: 500;
+}
+
+.tb-apply:hover {
+  background: #0a4fbd;
+}
+
+.tb-link {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 360px;
+  padding: 8px 12px;
+}
+
+/* Icon choice rows: alignment, wrapping, rotation. */
+.tb-choices {
+  display: flex;
+  gap: 2px;
+  padding: 0 6px;
+}
+
+.tb-choice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #444746 !important;
+}
+
+.tb-choice:hover {
+  background: rgba(68, 71, 70, 0.08);
+}
+
+.tb-choice[aria-pressed="true"] {
+  background: #d3e3fd;
+  color: #041e49 !important;
+}
+
+/* Colour palettes. */
+.tb-palette {
+  padding: 0 12px 4px;
+}
+
+.tb-reset {
+  margin: 0 -12px 6px;
+  width: calc(100% + 24px);
+}
+
+.tb-swatches {
+  display: grid;
+  grid-template-columns: repeat(10, 18px);
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.tb-swatches-gap {
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+.tb-swatch {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.tb-swatch:hover {
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.12),
+    0 0 0 2px #dadce0;
+}
+
+.tb-swatch[aria-checked="true"] {
+  box-shadow:
+    inset 0 0 0 2px #fff,
+    0 0 0 2px #0b57d0;
+}
+
+.tb-custom-color {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e1e3e1;
+  color: #5f6368;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tb-plus {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: #444746;
+  cursor: pointer;
+}
+
+.tb-plus:hover {
+  background: rgba(68, 71, 70, 0.08);
+}
+
+.tb-picker {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+
+/* Borders: the preset grid and, beside it, the colour and line style. */
+.tb-borders {
+  display: flex;
+  gap: 8px;
+  padding: 0 8px;
+}
+
+.tb-border-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 32px);
+  gap: 2px;
+}
+
+.tb-border-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-left: 8px;
+  border-left: 1px solid #e1e3e1;
+}
+
+.tb-border-color {
+  position: relative;
+  flex-direction: column;
+  cursor: pointer;
+}
+
+.tb-border-color svg {
+  margin-bottom: -3px;
+}
+
+.tb-border-style {
+  height: 28px;
+  border: 1px solid #c7c7c7;
+  border-radius: 4px;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+}

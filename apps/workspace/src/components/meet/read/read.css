@@ -1,0 +1,93 @@
+/* Meet across meetings (Read AI parity): left nav, sections, charts, Ask panel. Builds on meet.css (mt-*). */
+.rd-shell { display: flex; height: 100%; min-height: 0; }
+.rd-nav { width: 196px; flex: none; border-right: 1px solid var(--ix-line); padding: 16px 10px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.rd-nav h1 { font: 600 15px var(--font-sans); margin: 2px 8px 12px; display: flex; align-items: center; gap: 8px; }
+.rd-nav a { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 9px; color: var(--ix-ink); text-decoration: none; font-size: 13.5px; }
+.rd-nav a:hover { background: var(--ix-hover); }
+.rd-nav a.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 600; }
+.rd-nav .sep { height: 1px; background: var(--ix-line); margin: 8px 6px; }
+.rd-main { flex: 1; min-width: 0; overflow-y: auto; }
+.rd-page { max-width: 1040px; margin: 0 auto; padding: 22px 20px 64px; display: grid; gap: 18px; }
+.rd-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.rd-head h2 { font: 650 20px var(--font-sans); margin: 0; flex: 1; min-width: 180px; }
+.rd-sub { margin: -10px 0 0; font-size: 13px; color: var(--ix-muted); }
+.rd-seg { display: inline-flex; border: 1px solid var(--ix-line); border-radius: 9px; overflow: hidden; }
+.rd-seg button { border: 0; background: var(--ix-panel); color: var(--ix-ink); padding: 6px 11px; font-size: 12.5px; cursor: pointer; }
+.rd-seg button + button { border-left: 1px solid var(--ix-line); }
+.rd-seg button.on { background: color-mix(in srgb, var(--accent) 16%, var(--ix-panel)); color: var(--accent); font-weight: 600; }
+.rd-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.rd-stat { background: var(--ix-panel); border: 1px solid var(--ix-line); border-radius: 14px; padding: 14px; }
+.rd-stat .k { font-size: 12px; color: var(--ix-muted); }
+.rd-stat .v { font: 650 24px var(--font-sans); margin-top: 4px; }
+.rd-stat .r { font-size: 12px; color: var(--ix-muted); margin-top: 2px; }
+.rd-stat.good .v { color: #16a34a; }
+.rd-stat.warn .v { color: #d97706; }
+.rd-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.rd-tag { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: var(--ix-hover); color: var(--ix-muted); }
+.rd-item { display: flex; gap: 10px; align-items: flex-start; padding: 10px 8px; border-radius: 10px; }
+.rd-item:hover { background: var(--ix-hover); }
+.rd-item .body { flex: 1; min-width: 0; }
+.rd-item .t { font-weight: 550; font-size: 14px; }
+.rd-item .m { font-size: 12px; color: var(--ix-muted); margin-top: 2px; }
+.rd-item a { color: inherit; }
+.rd-empty { font-size: 13px; color: var(--ix-muted); padding: 10px 4px; }
+.rd-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rd-table th { text-align: left; font-weight: 600; font-size: 12px; color: var(--ix-muted); padding: 6px 8px; border-bottom: 1px solid var(--ix-line); white-space: nowrap; }
+.rd-table td { padding: 7px 8px; border-bottom: 1px solid var(--ix-line); }
+.rd-table td.n, .rd-table th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.rd-scroll { overflow-x: auto; }
+.rd-topic { border-left: 3px solid var(--accent); padding: 4px 0 4px 12px; margin: 10px 0 16px; }
+.rd-topic h3 { margin: 0 0 6px; font: 600 14px var(--font-sans); display: flex; gap: 8px; align-items: center; }
+.rd-steps { display: grid; gap: 6px; }
+.rd-step { font-size: 13px; display: grid; grid-template-columns: 86px 1fr; gap: 8px; }
+.rd-step .d { color: var(--ix-muted); font-size: 12px; }
+.rd-chart { width: 100%; height: auto; display: block; }
+.rd-chart text { fill: var(--ix-muted); font-size: 10px; font-family: var(--font-sans); }
+.rd-bars { display: grid; gap: 6px; }
+.rd-bar { display: grid; grid-template-columns: 76px 1fr 82px; gap: 10px; align-items: center; font-size: 12.5px; }
+.rd-bar .track { height: 16px; background: var(--ix-hover); border-radius: 6px; position: relative; overflow: hidden; }
+.rd-bar .fill { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 6px; }
+.rd-bar .avg { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ix-ink); opacity: .45; }
+.rd-bar .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--ix-muted); }
+.rd-bar .num b { color: var(--ix-ink); font-weight: 600; }
+.rd-chat { display: grid; gap: 14px; }
+.rd-msg { max-width: 92%; padding: 10px 13px; border-radius: 14px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.rd-msg.user { justify-self: end; background: color-mix(in srgb, var(--accent) 16%, var(--ix-panel)); }
+.rd-msg.assistant { justify-self: start; background: var(--ix-panel); border: 1px solid var(--ix-line); }
+.rd-msg a.cite { display: inline-block; font-size: 11px; font-weight: 600; padding: 0 5px; margin: 0 1px; border-radius: 6px; background: var(--ix-hover); color: var(--accent); text-decoration: none; vertical-align: 1px; }
+.rd-srcs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; white-space: normal; }
+.rd-srcs a { font-size: 11.5px; padding: 2px 8px; border: 1px solid var(--ix-line); border-radius: 999px; color: var(--ix-muted); text-decoration: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-ask-form { display: flex; gap: 8px; }
+.rd-ask-form textarea { flex: 1; resize: none; min-height: 44px; max-height: 160px; }
+.rd-prompts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.rd-prompts button { text-align: left; border: 1px solid var(--ix-line); background: var(--ix-panel); color: var(--ix-ink); border-radius: 12px; padding: 10px 12px; font-size: 13px; cursor: pointer; }
+.rd-prompts button:hover { background: var(--ix-hover); }
+.rd-ask-layout { display: grid; grid-template-columns: 220px 1fr; gap: 16px; align-items: start; }
+.rd-threads { display: grid; gap: 2px; max-height: 70vh; overflow-y: auto; }
+.rd-threads button { text-align: left; border: 0; background: none; color: var(--ix-ink); padding: 7px 9px; border-radius: 8px; font-size: 13px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-threads button:hover, .rd-threads button.on { background: var(--ix-hover); }
+.rd-fab { position: fixed; right: 20px; bottom: 20px; z-index: 40; border: 0; border-radius: 999px; padding: 11px 16px; font-weight: 600; font-size: 13.5px; color: var(--on-accent); background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: 0 6px 24px rgba(0,0,0,.18); cursor: pointer; display: inline-flex; gap: 8px; align-items: center; }
+.rd-panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); z-index: 50; background: var(--ix-bg); border-left: 1px solid var(--ix-line); box-shadow: -8px 0 30px rgba(0,0,0,.12); display: flex; flex-direction: column; }
+.rd-panel header { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--ix-line); }
+.rd-panel header b { flex: 1; }
+.rd-panel .scroll { flex: 1; overflow-y: auto; padding: 14px; }
+.rd-panel footer { padding: 10px 14px; border-top: 1px solid var(--ix-line); }
+.rd-rule { display: grid; grid-template-columns: 130px 1fr; gap: 8px; align-items: center; }
+.rd-folder-list { display: grid; gap: 2px; }
+.rd-folder-list button { display: flex; gap: 8px; align-items: center; width: 100%; text-align: left; border: 0; background: none; color: var(--ix-ink); padding: 8px 10px; border-radius: 9px; font-size: 13.5px; cursor: pointer; }
+.rd-folder-list button:hover, .rd-folder-list button.on { background: var(--ix-hover); }
+.rd-folder-list .c { margin-left: auto; font-size: 12px; color: var(--ix-muted); }
+.rd-two { display: grid; grid-template-columns: 250px 1fr; gap: 16px; align-items: start; }
+.rd-help { font-size: 12.5px; color: var(--ix-muted); line-height: 1.5; }
+.rd-ok { color: #16a34a; }
+.rd-bad { color: var(--ws-danger, #dc2626); }
+@media (max-width: 760px) {
+  .rd-shell { flex-direction: column; }
+  .rd-nav { width: auto; flex-direction: row; border-right: 0; border-bottom: 1px solid var(--ix-line); padding: 8px; overflow-x: auto; overflow-y: hidden; }
+  .rd-nav h1, .rd-nav .sep { display: none; }
+  .rd-nav a { white-space: nowrap; padding: 6px 10px; }
+  .rd-page { padding: 16px 16px 72px; }
+  .rd-ask-layout, .rd-two { grid-template-columns: 1fr; }
+  .rd-bar { grid-template-columns: 62px 1fr 70px; }
+  .rd-step { grid-template-columns: 1fr; gap: 0; }
+}

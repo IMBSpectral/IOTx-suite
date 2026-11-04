@@ -1,0 +1,56 @@
+/* Meeting report (Read-style), the in-person recorder and report settings. Uses the suite's --ix colours. */
+.mt-report { max-width: 960px; }
+.mt-rhead { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+.mt-rtitle { font: 400 30px var(--font-serif), Georgia, serif; margin: 4px 0 6px; overflow-wrap: anywhere; }
+.mt-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.mt-scores { display: flex; gap: 14px; flex-wrap: wrap; }
+.mt-score { position: relative; display: grid; justify-items: center; gap: 2px; width: 72px; cursor: help; }
+.mt-score .v { position: absolute; top: 13px; font: 700 15px var(--font-sans); }
+.mt-score .l { font-size: 11.5px; color: var(--ix-muted); text-align: center; line-height: 1.2; }
+.mt-rtools { gap: 8px; }
+.mt-rplayer { position: sticky; top: 0; z-index: 5; display: grid; gap: 6px; background: var(--ix-bg, var(--bg)); padding: 6px 0; }
+.mt-rplayer .mt-player { max-height: 340px; }
+.mt-ts { font: 600 12px var(--font-mono), ui-monospace, monospace; color: var(--accent, #6366f1); background: none; border: 0; padding: 2px 4px; border-radius: 6px; cursor: pointer; white-space: nowrap; flex: none; }
+.mt-ts:hover { background: var(--ix-hover); }
+.mt-chapter { display: flex; gap: 10px; align-items: flex-start; text-align: left; width: 100%; border: 0; background: none; color: var(--ix-ink); padding: 8px; border-radius: 10px; cursor: pointer; font: inherit; }
+.mt-chapter:hover, .mt-chapter.on { background: var(--ix-hover); }
+.mt-chapter .mt-ts { padding-top: 3px; }
+.mt-rgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.mt-badge { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 2px 8px; flex: none; margin-top: 1px; }
+.mt-badge.ok { background: rgba(16, 185, 129, .15); color: #059669; }
+.mt-badge.open { background: rgba(217, 119, 6, .15); color: #b45309; }
+.mt-clip { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; }
+.mt-speakers { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.mt-spk { border: 1px solid var(--ix-line); border-radius: 12px; padding: 12px; display: grid; gap: 8px; min-width: 0; }
+.mt-spk-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mt-av { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 13px; flex: none; }
+.mt-bar { height: 6px; border-radius: 4px; background: var(--ix-hover); overflow: hidden; }
+.mt-bar i { display: block; height: 100%; border-radius: 4px; }
+.mt-spk dl { margin: 0; display: grid; gap: 3px; font-size: 13px; }
+.mt-spk dl div { display: flex; justify-content: space-between; gap: 8px; }
+.mt-spk dt { color: var(--ix-muted); }
+.mt-spk dd { margin: 0; font-weight: 600; text-align: right; }
+.mt-chart { width: 100%; height: 130px; cursor: crosshair; display: block; }
+.mt-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; align-items: center; margin-top: 6px; }
+.mt-legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+.mt-ask { border-bottom: 1px solid var(--ix-line); padding: 8px 0; }
+.mt-ask .q { font-weight: 600; margin: 0 0 4px; }
+.mt-ask .a { margin: 0; white-space: pre-wrap; }
+.mt-script p { cursor: pointer; padding: 3px 6px; border-radius: 8px; }
+.mt-script p:hover { background: var(--ix-hover); }
+.mt-script p.on { background: var(--accent-soft, rgba(99, 102, 241, .14)); }
+.mt-script mark { background: rgba(250, 204, 21, .45); color: inherit; border-radius: 3px; }
+/* In-person recorder */
+.mt-recorder { max-width: 520px; margin: 0 auto; padding: 24px 16px 48px; display: grid; gap: 16px; }
+.mt-rec-face { display: grid; justify-items: center; gap: 14px; padding: 26px 16px; }
+.mt-rec-time { font: 600 48px var(--font-mono), ui-monospace, monospace; letter-spacing: .02em; }
+.mt-rec-btn { width: 84px; height: 84px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; background: #e5484d; color: #fff; box-shadow: 0 8px 24px rgba(229, 72, 77, .35); }
+.mt-rec-btn:disabled { opacity: .5; cursor: default; }
+.mt-rec-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.mt-level { width: 100%; height: 6px; border-radius: 4px; background: var(--ix-hover); overflow: hidden; }
+.mt-level i { display: block; height: 100%; background: #10b981; transition: width .1s linear; }
+@media (max-width: 640px) {
+  .mt-rtitle { font-size: 24px; }
+  .mt-scores { width: 100%; justify-content: space-between; }
+  .mt-rplayer .mt-player { max-height: 220px; }
+}

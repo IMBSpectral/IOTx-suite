@@ -1,0 +1,294 @@
+:root {
+  --bg: #f9fbfd;
+  --surface: #ffffff;
+  --border: #dadce0;
+  --text: #1f1f1f;
+  --muted: #5f6368;
+  --accent: #0b57d0;
+  --accent-soft: #d3e3fd;
+  --danger: #c5221f;
+  font-family: Arial, Helvetica, sans-serif;
+  color: var(--text);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+#app {
+  display: grid;
+  grid-template-rows: auto auto auto 1fr auto;
+  height: 100vh;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.logo {
+  width: 26px;
+  height: 32px;
+  border-radius: 3px;
+  background:
+    linear-gradient(var(--surface), var(--surface)) 6px 12px / 14px 2px no-repeat,
+    linear-gradient(var(--surface), var(--surface)) 6px 17px / 14px 2px no-repeat,
+    linear-gradient(var(--surface), var(--surface)) 6px 22px / 14px 2px no-repeat,
+    linear-gradient(var(--surface), var(--surface)) 12px 12px / 2px 12px no-repeat,
+    #188038;
+  flex: none;
+}
+
+.title {
+  font-size: 18px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 2px 6px;
+  background: transparent;
+  min-width: 120px;
+}
+
+.title:hover,
+.title:focus {
+  border-color: var(--border);
+  outline: none;
+}
+
+.status {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status[data-kind="error"] {
+  color: var(--danger);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 18px;
+  padding: 7px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.btn.primary {
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: #041e49;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 16px;
+  padding: 4px 8px;
+  background: #edf2fa;
+  border-radius: 24px;
+}
+
+.toolbar button {
+  min-width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.toolbar button:hover {
+  background: rgba(68, 71, 70, 0.08);
+}
+
+.toolbar .sep {
+  width: 1px;
+  height: 20px;
+  background: #c7c7c7;
+  margin: 0 6px;
+}
+
+.formula-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.namebox {
+  width: 96px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 13px;
+}
+
+.namebox:focus {
+  outline: 1px solid var(--accent);
+}
+
+.fx {
+  color: var(--muted);
+  font-style: italic;
+  border-left: 1px solid var(--border);
+  padding-left: 8px;
+}
+
+.formula {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  padding: 4px;
+}
+
+.formula:focus {
+  outline: none;
+}
+
+.grid {
+  position: relative;
+  min-height: 0;
+  background: var(--surface);
+}
+
+.grid-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.grid-scroller {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  cursor: cell;
+}
+
+.grid-spacer {
+  pointer-events: none;
+}
+
+/* Always focused; invisible until it becomes the cell editor. */
+.cell-input {
+  position: absolute;
+  z-index: 3;
+  margin: 0;
+  padding: 2px 4px;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  white-space: pre;
+  font: 13.3px Arial, Helvetica, sans-serif;
+  line-height: 16px;
+  opacity: 0;
+  pointer-events: none;
+  caret-color: transparent;
+  background: transparent;
+}
+
+.cell-input.editing {
+  opacity: 1;
+  pointer-events: auto;
+  caret-color: auto;
+  background: var(--surface);
+  box-shadow: 0 0 0 2px var(--accent), 0 2px 6px rgba(0, 0, 0, 0.2);
+  field-sizing: content;
+}
+
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  min-height: 40px;
+}
+
+.add-sheet {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.sheet-tabs {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  flex: 1;
+}
+
+.tab {
+  border: none;
+  background: transparent;
+  padding: 7px 16px;
+  border-radius: 6px 6px 0 0;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tab[aria-selected="true"] {
+  background: var(--accent-soft);
+  color: #041e49;
+  font-weight: bold;
+}
+
+.stats {
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.people {
+  display: flex;
+  align-items: center;
+  margin-right: 4px;
+}
+
+.avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  margin-left: -6px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: bold;
+  display: grid;
+  place-items: center;
+}

@@ -1,0 +1,22 @@
+{
+  "name": "spectral-sheets",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "engine": "node scripts/build-engine.mjs",
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "^24.19.2",
+    "typescript": "5.9.3",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  }
+}

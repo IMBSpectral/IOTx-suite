@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>IOTx Read</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <img src="icons/icon32.png" alt="" width="20" height="20" />
+    <strong>IOTx Read</strong>
+    <span id="who" class="muted"></span>
+  </header>
+
+  <section id="signin" hidden>
+    <p>Notes for Google Meet, Zoom and Teams calls. In IOTx Meet, open <b>Integrations</b> and choose <b>Connect browser extension</b>, then enter the code here.</p>
+    <label>Server <input id="server" type="url" placeholder="https://imbspectral.online" /></label>
+    <label>Code <input id="code" placeholder="ABCD-EFGH" autocomplete="off" spellcheck="false" /></label>
+    <details><summary>Paste a token instead</summary><input id="token" placeholder="iotxr_…" autocomplete="off" spellcheck="false" /></details>
+    <button id="signinBtn" class="primary">Sign in</button>
+  </section>
+
+  <section id="main" hidden>
+    <div id="recCard" class="card" hidden>
+      <div class="row"><span class="dot"></span><b>Recording for notes</b><span id="timer" class="muted"></span></div>
+      <div id="recTitle" class="muted"></div>
+      <div id="recInfo" class="muted small"></div>
+      <div class="row"><button id="stopBtn" class="primary">Stop and make the report</button><button id="discardBtn" class="link">Discard</button></div>
+    </div>
+
+    <div id="idleCard" class="card">
+      <div id="tabInfo" class="muted"></div>
+      <label class="check"><input id="mic" type="checkbox" checked /> Include my microphone <button id="micAllow" class="link small">Allow microphone</button></label>
+      <button id="startBtn" class="primary">● Start recording for notes</button>
+      <p class="small muted">Let everyone in the call know. A &ldquo;Recording for notes&rdquo; badge shows on the page while it records, and nothing is recorded until you press Start.</p>
+    </div>
+
+    <div id="lastCard" class="card" hidden>
+      <div id="lastText"></div>
+      <a id="lastLink" target="_blank" rel="noreferrer">Open the report</a>
+    </div>
+
+    <h2>Your next meetings</h2>
+    <button id="nextBtn" class="secondary" hidden>Add notes to my next meeting</button>
+    <div id="upcoming" class="list"><p class="muted small">Loading…</p></div>
+
+    <footer><a id="openMeet" target="_blank" rel="noreferrer">Open IOTx Meet</a> · <button id="signoutBtn" class="link">Sign out</button></footer>
+  </section>
+
+  <p id="err" class="err" role="alert"></p>
+  <script src="popup.js" type="module"></script>
+</body>
+</html>

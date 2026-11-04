@@ -1,0 +1,178 @@
+@import "tailwindcss";
+@import "./iotx.css";
+@import "./iotx-browser.css";
+
+/* dark: utilities follow the chosen theme (html[data-theme]), set before paint in layout.tsx. */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/*
+ * Theme tokens. Neutral greys with a violet accent; the accent runs into a
+ * magenta for gradients (primary buttons, the dashboard glow).
+ */
+:root {
+  --shell: #f3f3f4;
+  --bg: #fbfbfb;
+  --panel: #ffffff;
+  --border: #e6e6e9;
+  --text: #17171c;
+  --muted: #6f6f7a;
+  --accent: #4f46e5;
+  --accent-2: #8b5cf6;
+  --accent-soft: #ecebfd;
+  --glow-1: rgb(79 70 229 / 0.18);
+  --glow-2: rgb(139 92 246 / 0.14);
+  --glow-3: rgb(255 146 64 / 0.16);
+  --shadow-surface: 0 1px 2px rgb(16 16 24 / 0.04), 0 12px 32px -16px rgb(16 16 24 / 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --shell: #09090b;
+    --bg: #111114;
+    --panel: #18181c;
+    --border: #2a2a31;
+    --text: #f6f6f8;
+    --muted: #9d9daa;
+    --accent: #8b85ff;
+    --accent-2: #a78bfa;
+    --accent-soft: #24234a;
+    --glow-1: rgb(138 109 255 / 0.22);
+    --glow-2: rgb(214 92 200 / 0.14);
+    --glow-3: rgb(255 140 70 / 0.08);
+    --shadow-surface: 0 1px 2px rgb(0 0 0 / 0.4), 0 16px 40px -20px rgb(0 0 0 / 0.6);
+  }
+}
+
+:root[data-theme="dark"] {
+  --shell: #09090b;
+  --bg: #111114;
+  --panel: #18181c;
+  --border: #2a2a31;
+  --text: #f6f6f8;
+  --muted: #9d9daa;
+  --accent: #8b85ff;
+  --accent-2: #a78bfa;
+  --accent-soft: #24234a;
+  --glow-1: rgb(138 109 255 / 0.22);
+  --glow-2: rgb(214 92 200 / 0.14);
+  --glow-3: rgb(255 140 70 / 0.08);
+  --shadow-surface: 0 1px 2px rgb(0 0 0 / 0.4), 0 16px 40px -20px rgb(0 0 0 / 0.6);
+}
+
+html, body {
+  background: var(--shell);
+  color: var(--text);
+}
+
+body {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01";
+}
+
+::selection { background: var(--accent-soft); color: inherit; }
+
+/* Primary actions: the accent gradient with a soft glow. */
+.btn-primary {
+  background-image: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.18) inset, 0 4px 14px -4px var(--glow-1);
+  transition: filter 0.15s, box-shadow 0.15s, opacity 0.15s;
+}
+.btn-primary:hover:not(:disabled) { filter: brightness(1.06); box-shadow: 0 1px 0 rgb(255 255 255 / 0.2) inset, 0 6px 20px -4px var(--glow-1); }
+.btn-primary:disabled { opacity: 0.45; box-shadow: none; }
+
+/* The dashboard hero's colour glow, like Lovable's. */
+.hero-glow {
+  background:
+    radial-gradient(60% 50% at 30% 0%, var(--glow-1), transparent 70%),
+    radial-gradient(50% 45% at 75% 10%, var(--glow-2), transparent 70%),
+    radial-gradient(45% 40% at 55% 35%, var(--glow-3), transparent 75%);
+}
+
+/* Cards that lift a little on hover. */
+.card-lift { transition: transform 0.18s ease, box-shadow 0.18s ease; }
+.card-lift:hover { transform: translateY(-2px); }
+.card-lift:hover .card-lift-media { box-shadow: 0 12px 28px -14px rgb(16 16 24 / 0.35); }
+
+@layer base {
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+}
+
+/* Element defaults live in the base layer so Tailwind utilities (border-transparent,
+   [scrollbar-width:none]…) can override them; unlayered rules would always win. */
+@layer base {
+  * { border-color: var(--border); }
+  /* Thin scrollbars everywhere, like Lovable's. */
+  * { scrollbar-width: thin; scrollbar-color: rgb(120 113 108 / 0.35) transparent; }
+}
+
+/*
+ * App shell: the sidebar sits on the shell colour and each page's <main> is an
+ * inset, rounded surface. The editor lays out its own surfaces (.app-editor).
+ */
+.app-shell > main:not(.app-editor) {
+  margin: 8px 8px 8px 0;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg);
+  box-shadow: var(--shadow-surface);
+}
+/* A page without a sidebar (Settings under the slim app bar) keeps the inset on both sides. */
+.app-shell > main:not(.app-editor):first-child { margin-left: 8px; }
+
+/* Agent replies render Markdown: plans, lists, code. Kept compact for chat. */
+.prose-chat > * + * { margin-top: 0.6em; }
+.prose-chat h1, .prose-chat h2, .prose-chat h3 { font-weight: 600; font-size: 0.95em; margin-top: 1em; }
+.prose-chat ul { list-style: disc; padding-left: 1.2em; }
+.prose-chat ol { list-style: decimal; padding-left: 1.3em; }
+.prose-chat li + li { margin-top: 0.2em; }
+.prose-chat code { font-family: ui-monospace, monospace; font-size: 0.85em; background: rgba(120,113,108,.12); padding: 0.1em 0.3em; border-radius: 4px; }
+.prose-chat pre { overflow-x: auto; background: rgba(120,113,108,.1); padding: 0.7em; border-radius: 8px; font-size: 0.8em; }
+.prose-chat pre code { background: none; padding: 0; }
+.prose-chat a { color: var(--accent); text-decoration: underline; }
+.prose-chat table { border-collapse: collapse; font-size: 0.85em; }
+.prose-chat th, .prose-chat td { border: 1px solid var(--border); padding: 0.25em 0.5em; }
+.prose-chat blockquote { border-left: 2px solid var(--border); padding-left: 0.7em; color: var(--muted); }
+
+/* In the editor, a horizontal trackpad or touch swipe must not trigger the
+   browser's back/forward navigation (and lose the session). */
+html:has(.app-editor),
+body:has(.app-editor),
+.app-editor {
+  overscroll-behavior-x: none;
+}
+
+/* Animated tips while the preview boots (TipAnimation). Motion is decoration
+   only, so it stops for people who ask for reduced motion. */
+@keyframes tip-draw { from { stroke-dashoffset: 120; } to { stroke-dashoffset: 0; } }
+@keyframes tip-bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
+@keyframes tip-drop { 0% { transform: translateY(-26px); opacity: 0; } 40% { opacity: 1; } 70%, 100% { transform: translateY(0); opacity: 1; } }
+@keyframes tip-squeeze { 0%, 15% { width: 92px; } 50%, 65% { width: 34px; } 100% { width: 92px; } }
+@keyframes tip-slide { 0% { transform: translateX(-30px); opacity: 0; } 40%, 100% { transform: translateX(0); opacity: 1; } }
+@keyframes tip-scan { 0% { transform: translateY(0); } 50% { transform: translateY(34px); } 100% { transform: translateY(0); } }
+@keyframes tip-turn { 0%, 30% { transform: rotate(0deg); } 60%, 100% { transform: rotate(90deg); } }
+@keyframes tip-click { 0%, 40% { transform: translate(0, 0); } 60% { transform: translate(0, 0) scale(0.85); } 70%, 100% { transform: translate(0, 0) scale(1); } }
+@keyframes tip-fade { 0%, 20% { opacity: 0; } 50%, 100% { opacity: 1; } }
+.tip-anim * { transform-box: fill-box; transform-origin: center; }
+.tip-draw { stroke-dasharray: 120; animation: tip-draw 2.4s ease-in-out infinite alternate; }
+.tip-bounce { animation: tip-bounce 1.2s ease-in-out infinite; }
+.tip-drop { animation: tip-drop 2.4s ease-out infinite; }
+.tip-squeeze { animation: tip-squeeze 3.2s ease-in-out infinite; }
+.tip-slide { animation: tip-slide 2.4s ease-out infinite; }
+.tip-scan { animation: tip-scan 2.4s ease-in-out infinite; }
+.tip-turn { animation: tip-turn 2.4s ease-in-out infinite alternate; }
+.tip-click { animation: tip-click 1.8s ease-in-out infinite; }
+.tip-fade { animation: tip-fade 2.4s ease-in-out infinite alternate; }
+@media (prefers-reduced-motion: reduce) {
+  .tip-anim * { animation: none !important; }
+}
+
+/* Canvas: shapes in the default (near-black) ink stay readable in dark mode. */
+:root[data-theme="dark"] g[data-ink] > :is(rect, ellipse, line, polyline) { stroke: var(--text); }
+:root[data-theme="dark"] g[data-ink] > text:not([data-mockup-label]) { fill: var(--text); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) g[data-ink] > :is(rect, ellipse, line, polyline) { stroke: var(--text); }
+  :root:not([data-theme="light"]) g[data-ink] > text:not([data-mockup-label]) { fill: var(--text); }
+}

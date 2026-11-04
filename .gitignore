@@ -1,0 +1,59 @@
+# IOTx Suite: what stays out of the repository.
+
+# Secrets and per-install settings (each instance keeps its own on its server)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+deploy/clients/*/
+!deploy/clients/example/
+
+# Dependencies, builds and caches
+node_modules/
+.next/
+dist/
+target/
+*.tsbuildinfo
+.builds/
+deploy/out/
+*.tgz
+*.zip
+
+# Runtime data: user projects, uploaded files, logs
+projects-data/
+storage/
+.logs/
+*.log
+
+# Tools and scratch
+.playwright-mcp/
+.claude/
+New folder/
+*.png
+!web/public/**/*.png
+!apps/*/icons/**/*.png
+!apps/*/public/**/*.png
+net-editor.txt
+
+# Research and third-party material: never part of the product (IP audit, 31 Oct 2026)
+docs/rea/
+docs/LOVABLE-*.md
+docs/readai-*.md
+docs/screens/
+zoho-books/
+teams/
+suite/parity/
+suite/teams-architecture-plan.md
+apps/tally/parity/
+
+# Forks of open-source engines live in their own repositories
+suite/
+docs/REA-FINDINGS.md
+docs/FEATURE-PARITY.md
+docs/PARITY-SCORECARD.md
+docs/ROADMAP-TO-90.md
+docs/FEATURE-CHECKLIST.md
+
+# The Accounts app (apps/tally) has its own repository for now
+apps/tally/

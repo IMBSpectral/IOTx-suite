@@ -1,0 +1,747 @@
+<title>IOTx Home Shell</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap">
+<style>
+/* Layout: a document band (title, tabs) over three views; the Prototype view is a framed, working app shell with its own theme. */
+:root {
+  --bg: #f4f5fb; --surface: #ffffff; --ink: #11132a; --muted: #5d6280; --line: #dfe2ef; --accent: #4f46e5; --accent-soft: #ecebfd;
+  --ui: "Geist", "Segoe UI", system-ui, sans-serif; --serif: "Instrument Serif", Georgia, serif; --mono: "Geist Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #0b0c16; --surface: #14162a; --ink: #eceefa; --muted: #9da2c2; --line: #262a45; --accent: #8b85ff; --accent-soft: #23224a; color-scheme: dark; } }
+:root[data-theme="dark"] { --bg: #0b0c16; --surface: #14162a; --ink: #eceefa; --muted: #9da2c2; --line: #262a45; --accent: #8b85ff; --accent-soft: #23224a; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.6 var(--ui); }
+.wrap { max-width: 1280px; margin: 0 auto; padding-block: 32px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.doc-head { display: flex; flex-wrap: wrap; align-items: end; gap: 16px 32px; justify-content: space-between; }
+.doc-head h1 { font: 400 clamp(2rem, 4vw, 3rem)/1.05 var(--serif); margin: 6px 0 0; letter-spacing: -0.01em; text-wrap: balance; }
+.doc-head h1 em { color: var(--accent); }
+.kicker { font: 500 12px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.tabs { display: inline-flex; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.tabs button { font: 500 14px var(--ui); color: var(--muted); background: none; border: 0; padding: 8px 14px; border-radius: 9px; cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--accent); color: #fff; }
+.view { margin-top: 24px; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-bottom: 14px; font-size: 13px; color: var(--muted); }
+.controls label { display: inline-flex; align-items: center; gap: 8px; }
+.controls select, .seg button { font: 500 13px var(--ui); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+.seg { display: inline-flex; gap: 0; } .seg button { border-radius: 0; margin-left: -1px; } .seg button:first-child { border-radius: 8px 0 0 8px; margin-left: 0; } .seg button:last-child { border-radius: 0 8px 8px 0; }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); position: relative; }
+.hint { font: 12px var(--mono); color: var(--muted); }
+
+/* ── The prototype (its own theme) ─────────────────────────── */
+.proto { --p-bg: #f7f7fc; --p-panel: #ffffff; --p-side: #fbfbfe; --p-ink: #14152b; --p-muted: #6a6e8a; --p-line: #e8e9f3; --p-hover: #f1f1fa; --p-a: #4f46e5; --p-a2: #8b5cf6; --p-a-soft: #eeecff; --p-glow1: rgba(99, 91, 255, .16); --p-glow2: rgba(236, 120, 196, .12); --p-shadow: 0 1px 2px rgba(20, 21, 43, .04), 0 12px 32px rgba(20, 21, 43, .08);
+  background: var(--p-bg); color: var(--p-ink); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; font: 13.5px/1.5 var(--ui); position: relative; box-shadow: 0 30px 80px rgba(17, 19, 42, .12); }
+.proto[data-pt="dark"] { --p-bg: #0c0d18; --p-panel: #141526; --p-side: #101120; --p-ink: #ebecf8; --p-muted: #9195b4; --p-line: #23253d; --p-hover: #1b1d33; --p-a-soft: #24234a; --p-glow1: rgba(124, 117, 255, .22); --p-glow2: rgba(236, 120, 196, .1); --p-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 16px 40px rgba(0, 0, 0, .45); }
+.proto[data-acc="ember"] { --p-a: #e8590c; --p-a2: #f59f00; --p-a-soft: #fff0e6; --p-glow1: rgba(232, 89, 12, .14); --p-glow2: rgba(245, 159, 0, .12); }
+.proto[data-acc="teal"] { --p-a: #0d9488; --p-a2: #22b8cf; --p-a-soft: #e3f8f5; --p-glow1: rgba(13, 148, 136, .15); --p-glow2: rgba(34, 184, 207, .12); }
+.proto[data-acc="graphite"] { --p-a: #2b2f45; --p-a2: #6b7194; --p-a-soft: #ececf3; --p-glow1: rgba(43, 47, 69, .1); --p-glow2: rgba(107, 113, 148, .1); }
+.proto[data-pt="dark"][data-acc="ember"] { --p-a-soft: #3a2214; } .proto[data-pt="dark"][data-acc="teal"] { --p-a-soft: #123330; } .proto[data-pt="dark"][data-acc="graphite"] { --p-a: #b9bdd6; --p-a-soft: #23253d; }
+.shell { display: grid; grid-template-columns: 252px 1fr; height: 760px; }
+.proto.collapsed .shell { grid-template-columns: 68px 1fr; }
+.side { background: var(--p-side); border-right: 1px solid var(--p-line); display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 16px 16px 12px; }
+.mark { width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg, var(--p-a), var(--p-a2)); display: grid; place-items: center; color: #fff; font: 700 12px var(--ui); flex: none; box-shadow: 0 6px 16px var(--p-glow1); }
+.brand b { font: 700 17px var(--ui); letter-spacing: -0.02em; }
+.iconbtn { width: 32px; height: 32px; border-radius: 9px; border: 0; background: none; color: var(--p-muted); display: grid; place-items: center; cursor: pointer; flex: none; }
+.iconbtn:hover { background: var(--p-hover); color: var(--p-ink); }
+.newchat { margin: 4px 12px 10px; display: flex; align-items: center; gap: 8px; justify-content: center; border: 0; border-radius: 11px; padding: 10px; color: #fff; font: 600 13px var(--ui); background: linear-gradient(135deg, var(--p-a), var(--p-a2)); cursor: pointer; box-shadow: 0 8px 20px var(--p-glow1); }
+.sect { padding: 6px 12px; font: 600 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--p-muted); margin-top: 8px; }
+.navlist { display: flex; flex-direction: column; gap: 1px; padding: 0 8px; }
+.nav { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 9px; color: var(--p-ink); cursor: pointer; border: 0; background: none; font: 500 13px var(--ui); text-align: left; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav:hover { background: var(--p-hover); }
+.nav.on { background: var(--p-a-soft); color: var(--p-a); }
+.nav .ico { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; flex: none; }
+.nav .dim { color: var(--p-muted); font-weight: 400; }
+.side-foot { margin-top: auto; padding: 10px; border-top: 1px solid var(--p-line); display: flex; align-items: center; gap: 10px; }
+.avatar { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, #f59f00, #e64980); color: #fff; display: grid; place-items: center; font: 600 12px var(--ui); flex: none; }
+.who { min-width: 0; line-height: 1.25; } .who b { display: block; font-size: 13px; } .who span { font-size: 11.5px; color: var(--p-muted); }
+.proto.collapsed .label, .proto.collapsed .sect, .proto.collapsed .who, .proto.collapsed .brand b, .proto.collapsed .newchat span { display: none; }
+.proto.collapsed .newchat { margin: 4px 14px 10px; padding: 10px 0; }
+.proto.collapsed .nav { justify-content: center; }
+.main { display: flex; flex-direction: column; min-width: 0; position: relative; overflow: hidden; }
+.topbar { display: flex; align-items: center; gap: 10px; padding: 12px 18px; position: relative; z-index: 3; }
+.search { flex: 1; max-width: 460px; display: flex; align-items: center; gap: 8px; background: var(--p-panel); border: 1px solid var(--p-line); border-radius: 11px; padding: 8px 12px; color: var(--p-muted); cursor: text; }
+.search kbd { margin-left: auto; font: 11px var(--mono); border: 1px solid var(--p-line); border-radius: 5px; padding: 0 5px; }
+.topbar .sp { flex: 1; }
+.dot { position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: #e64980; border: 2px solid var(--p-bg); }
+.canvas { flex: 1; overflow-y: auto; position: relative; }
+.aurora { position: absolute; inset: -120px 0 auto 0; height: 560px; pointer-events: none; background: radial-gradient(40% 50% at 30% 40%, var(--p-glow1), transparent 70%), radial-gradient(35% 45% at 72% 30%, var(--p-glow2), transparent 70%); filter: blur(10px); animation: drift 18s ease-in-out infinite alternate; }
+@keyframes drift { to { transform: translate3d(30px, 20px, 0) scale(1.05); } }
+@media (prefers-reduced-motion: reduce) { .aurora { animation: none; } .launcher, .menu { transition: none !important; } }
+.hero { position: relative; max-width: 760px; margin: 0 auto; padding: 40px 24px 24px; text-align: center; }
+.greet { font: 500 14px var(--ui); color: var(--p-muted); }
+.hero h2 { font: 600 44px/1.08 var(--ui); letter-spacing: -0.035em; margin: 10px 0 10px; text-wrap: balance; }
+.hero h2 em { font: italic 400 52px/1 var(--serif); letter-spacing: -0.01em; background: linear-gradient(120deg, var(--p-a), var(--p-a2)); -webkit-background-clip: text; background-clip: text; color: transparent; padding-right: 4px; }
+.hero p.sub { color: var(--p-muted); margin: 0 auto 22px; max-width: 520px; }
+.prompt { background: var(--p-panel); border: 1px solid var(--p-line); border-radius: 18px; box-shadow: var(--p-shadow); text-align: left; position: relative; }
+.prompt::before { content: ""; position: absolute; inset: -1px; border-radius: 19px; padding: 1px; background: linear-gradient(120deg, var(--p-a), transparent 40%, transparent 60%, var(--p-a2)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; opacity: .55; pointer-events: none; }
+.prompt textarea { width: 100%; border: 0; outline: none; resize: none; background: transparent; color: var(--p-ink); font: 15px/1.5 var(--ui); padding: 16px 18px 6px; min-height: 64px; }
+.prompt textarea::placeholder { color: var(--p-muted); }
+.prompt-bar { display: flex; align-items: center; gap: 4px; padding: 6px 10px 10px; flex-wrap: wrap; }
+.tool { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--p-muted); font: 500 12.5px var(--ui); padding: 6px 9px; border-radius: 8px; cursor: pointer; }
+.tool:hover { background: var(--p-hover); color: var(--p-ink); }
+.tool.on { color: var(--p-a); background: var(--p-a-soft); }
+.tool.locked { opacity: .45; cursor: not-allowed; }
+.send { margin-left: auto; width: 36px; height: 36px; border-radius: 11px; border: 0; color: #fff; background: linear-gradient(135deg, var(--p-a), var(--p-a2)); display: grid; place-items: center; cursor: pointer; }
+.quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 16px; }
+.qa { display: flex; align-items: center; gap: 10px; background: var(--p-panel); border: 1px solid var(--p-line); border-radius: 12px; padding: 10px 12px; text-align: left; color: var(--p-ink); font: 500 12.5px var(--ui); cursor: pointer; }
+.qa:hover { border-color: var(--p-a); }
+.apps-row { position: relative; max-width: 860px; margin: 8px auto 40px; padding: 0 24px; }
+.apps-row h3 { font: 600 14px var(--ui); margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+.apps-row h3 span { color: var(--p-muted); font-weight: 400; font-size: 12px; }
+.app-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; }
+.tile { background: var(--p-panel); border: 1px solid var(--p-line); border-radius: 14px; padding: 14px 10px 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; color: var(--p-ink); font: 500 12.5px var(--ui); transition: transform .15s, box-shadow .15s; }
+.tile:hover { transform: translateY(-2px); box-shadow: var(--p-shadow); }
+.appico { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: #fff; box-shadow: inset 0 -8px 16px rgba(0, 0, 0, .12); }
+.appico svg { width: 20px; height: 20px; }
+/* launcher */
+.scrim { position: absolute; inset: 0; background: rgba(12, 13, 24, .28); backdrop-filter: blur(3px); z-index: 20; opacity: 0; pointer-events: none; transition: opacity .18s; }
+.launcher { position: absolute; top: 58px; right: 70px; width: 470px; z-index: 21; background: var(--p-panel); border: 1px solid var(--p-line); border-radius: 18px; box-shadow: 0 30px 70px rgba(12, 13, 24, .28); padding: 16px; opacity: 0; transform: translateY(-8px) scale(.98); pointer-events: none; transition: opacity .18s, transform .18s; }
+.proto.lopen .scrim { opacity: 1; pointer-events: auto; }
+.proto.lopen .launcher { opacity: 1; transform: none; pointer-events: auto; }
+.launcher h4 { margin: 0; font: 600 15px var(--ui); } .launcher .sub2 { color: var(--p-muted); font-size: 12px; }
+.lgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 12px; }
+.lapp { border: 0; background: none; border-radius: 12px; padding: 10px 4px; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; color: var(--p-ink); font: 500 12px var(--ui); }
+.lapp:hover, .lapp:focus-visible { background: var(--p-hover); outline: none; }
+.lapp small { color: var(--p-muted); font-size: 10.5px; font-weight: 400; text-align: center; line-height: 1.2; }
+.lapp.hidden-app { opacity: .28; }
+.lsearch { display: flex; align-items: center; gap: 8px; border: 1px solid var(--p-line); border-radius: 10px; padding: 7px 10px; margin-top: 10px; color: var(--p-muted); background: var(--p-bg); }
+.lsearch input { border: 0; outline: none; background: transparent; color: var(--p-ink); font: 13px var(--ui); flex: 1; min-width: 0; }
+/* menus */
+.menu { position: absolute; z-index: 22; background: var(--p-panel); border: 1px solid var(--p-line); border-radius: 14px; box-shadow: 0 24px 60px rgba(12, 13, 24, .25); padding: 8px; opacity: 0; pointer-events: none; transform: translateY(-6px); transition: opacity .15s, transform .15s; }
+.menu.open { opacity: 1; pointer-events: auto; transform: none; }
+.theme-menu { top: 58px; right: 18px; width: 248px; }
+.theme-menu .row { display: flex; gap: 6px; margin: 6px 0 10px; }
+.theme-menu .row button { flex: 1; border: 1px solid var(--p-line); background: var(--p-bg); color: var(--p-ink); border-radius: 9px; padding: 8px 4px; font: 500 12px var(--ui); cursor: pointer; }
+.theme-menu .row button[aria-pressed="true"] { border-color: var(--p-a); color: var(--p-a); background: var(--p-a-soft); }
+.swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--p-panel); box-shadow: 0 0 0 1px var(--p-line); cursor: pointer; padding: 0; }
+.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--p-a); }
+.mlabel { font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--p-muted); padding: 4px 4px 0; }
+/* chat view */
+.chatview { max-width: 720px; margin: 0 auto; padding: 24px; display: flex; flex-direction: column; gap: 12px; position: relative; }
+.bubble { border-radius: 14px; padding: 12px 14px; max-width: 86%; }
+.bubble.me { align-self: flex-end; background: var(--p-a-soft); color: var(--p-ink); }
+.bubble.ai { background: var(--p-panel); border: 1px solid var(--p-line); }
+.step { display: flex; align-items: center; gap: 8px; color: var(--p-muted); font-size: 12.5px; }
+.step i { width: 18px; height: 18px; border-radius: 50%; background: var(--p-a-soft); color: var(--p-a); display: grid; place-items: center; font-style: normal; font-size: 10px; }
+/* admin view */
+.admin { display: grid; grid-template-columns: 210px 1fr; height: 100%; min-height: 0; }
+.rolelist { border-right: 1px solid var(--p-line); padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.rolebtn { display: flex; align-items: center; gap: 8px; border: 0; background: none; color: var(--p-ink); padding: 8px 10px; border-radius: 9px; font: 500 13px var(--ui); text-align: left; cursor: pointer; }
+.rolebtn:hover { background: var(--p-hover); } .rolebtn.on { background: var(--p-a-soft); color: var(--p-a); }
+.rolebtn span { margin-left: auto; font: 11px var(--mono); color: var(--p-muted); }
+.perm { padding: 16px 20px; overflow-y: auto; min-width: 0; }
+.perm-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.perm-head h3 { margin: 0; font: 600 18px var(--ui); letter-spacing: -0.02em; }
+.pchip { font: 500 11px var(--mono); border-radius: 999px; padding: 2px 8px; background: var(--p-a-soft); color: var(--p-a); }
+.apptabs { display: flex; gap: 4px; flex-wrap: wrap; margin: 14px 0 12px; }
+.apptab { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--p-line); background: var(--p-panel); color: var(--p-ink); border-radius: 999px; padding: 4px 10px 4px 5px; font: 500 12px var(--ui); cursor: pointer; }
+.apptab .mini { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; color: #fff; }
+.apptab .mini svg { width: 11px; height: 11px; }
+.apptab.on { border-color: var(--p-a); background: var(--p-a-soft); color: var(--p-a); }
+.access-card { display: flex; align-items: center; gap: 12px; background: var(--p-panel); border: 1px solid var(--p-line); border-radius: 12px; padding: 12px 14px; }
+.access-card b { font-size: 14px; }
+.fgroup { margin-top: 14px; background: var(--p-panel); border: 1px solid var(--p-line); border-radius: 12px; overflow: hidden; }
+.fgroup h5 { margin: 0; padding: 9px 14px; font: 600 12px var(--ui); background: var(--p-hover); display: flex; align-items: center; gap: 8px; }
+.fgroup h5 span { margin-left: auto; font: 11px var(--mono); color: var(--p-muted); font-weight: 400; }
+.frow { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-top: 1px solid var(--p-line); }
+.frow .fname { flex: 1; min-width: 0; } .frow .fname small { display: block; color: var(--p-muted); font: 11px var(--mono); }
+.frow input[type="number"], .frow select { width: 120px; border: 1px solid var(--p-line); background: var(--p-bg); color: var(--p-ink); border-radius: 7px; padding: 4px 6px; font: 12px var(--ui); }
+.lock { font: 500 11px var(--mono); color: var(--p-muted); border: 1px dashed var(--p-line); border-radius: 6px; padding: 2px 6px; }
+.sw { position: relative; width: 34px; height: 20px; flex: none; }
+.sw input { opacity: 0; width: 100%; height: 100%; margin: 0; position: absolute; cursor: pointer; z-index: 1; }
+.sw i { position: absolute; inset: 0; border-radius: 10px; background: #c9cbe0; transition: background .15s; }
+.proto[data-pt="dark"] .sw i { background: #3a3d5c; }
+.sw i::after { content: ""; position: absolute; left: 3px; top: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0, 0, 0, .2); }
+.sw input:checked + i { background: var(--p-a); } .sw input:checked + i::after { transform: translateX(14px); }
+.sw input:disabled + i { opacity: .4; }
+.sw input:focus-visible + i { outline: 2px solid var(--p-a); outline-offset: 2px; }
+.vmatrix { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.vmatrix th, .vmatrix td { padding: 7px 10px; border-top: 1px solid var(--p-line); text-align: center; }
+.vmatrix th:first-child, .vmatrix td:first-child { text-align: left; }
+.vmatrix th { font: 600 11px var(--mono); color: var(--p-muted); text-transform: uppercase; letter-spacing: .06em; background: var(--p-hover); }
+.toast { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%) translateY(20px); background: var(--p-ink); color: var(--p-panel); border-radius: 10px; padding: 8px 14px; font: 500 12.5px var(--ui); opacity: 0; transition: opacity .2s, transform .2s; z-index: 30; pointer-events: none; }
+.toast.show { opacity: 1; transform: translateX(-50%); }
+/* phone mode */
+.proto.phone { max-width: 390px; margin: 0 auto; border-radius: 34px; border: 10px solid #15172b; }
+.proto.phone .shell { grid-template-columns: 1fr; height: 760px; }
+.proto.phone .side { position: absolute; inset: 0 auto 0 0; width: 260px; z-index: 25; transform: translateX(-100%); transition: transform .2s; box-shadow: 20px 0 50px rgba(0, 0, 0, .2); }
+.proto.phone.drawer .side { transform: none; }
+.proto.phone .quick { grid-template-columns: 1fr; }
+.proto.phone .hero { padding: 20px 16px; } .proto.phone .hero h2 { font-size: 30px; } .proto.phone .hero h2 em { font-size: 36px; }
+.proto.phone .launcher { left: 10px; right: 10px; width: auto; top: 56px; } .proto.phone .lgrid { grid-template-columns: repeat(3, 1fr); }
+.proto.phone .search { display: none; } .proto.phone .theme-menu { right: 10px; }
+.proto.phone .admin { grid-template-columns: 1fr; } .proto.phone .rolelist { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--p-line); }
+.burger { display: none; } .proto.phone .burger { display: grid; }
+.proto-scroll { overflow-x: auto; padding: 4px 2px 10px; }
+.proto-scroll > .proto:not(.phone) { min-width: 980px; }
+
+/* ── Plan views ─────────────────────────── */
+.doc { max-width: 900px; }
+.doc h2 { font: 400 2rem/1.15 var(--serif); margin: 40px 0 10px; text-wrap: balance; }
+.doc h3 { font: 600 1.05rem var(--ui); margin: 26px 0 8px; }
+.doc p, .doc li { max-width: 72ch; }
+.doc .lead { font-size: 1.1rem; color: var(--muted); }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 14px 0; }
+.c { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; min-width: 0; }
+.c h4 { margin: 0 0 6px; font: 600 15px var(--ui); }
+.c p { margin: 0; color: var(--muted); font-size: 14px; }
+.c .k { font: 500 11px var(--mono); color: var(--accent); letter-spacing: .1em; text-transform: uppercase; }
+.layers { display: grid; gap: 8px; margin: 16px 0; }
+.layer { display: grid; grid-template-columns: 170px 1fr; gap: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; align-items: start; }
+@media (max-width: 640px) { .layer { grid-template-columns: 1fr; gap: 4px; } }
+.layer b { font-family: var(--ui); } .layer .k { font: 500 11px var(--mono); color: var(--accent); display: block; }
+pre.code { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font: 13px/1.55 var(--mono); }
+.tablewrap { overflow-x: auto; margin: 12px 0; }
+table.t { border-collapse: collapse; width: 100%; min-width: 640px; background: var(--surface); font-size: 14px; }
+table.t th, table.t td { text-align: left; border-bottom: 1px solid var(--line); padding: 9px 12px; vertical-align: top; }
+table.t th { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+table.t code { font: 12.5px var(--mono); color: var(--accent); }
+.phases { display: grid; gap: 10px; margin: 14px 0; }
+.phase { display: grid; grid-template-columns: 110px 1fr; gap: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+@media (max-width: 640px) { .phase { grid-template-columns: 1fr; gap: 4px; } }
+.phase .when { font: 500 12px var(--mono); color: var(--accent); text-transform: uppercase; letter-spacing: .08em; }
+.phase h4 { margin: 0 0 4px; font: 600 15px var(--ui); }
+.phase ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 14px; }
+.q { background: var(--accent-soft); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+.q ol { margin: 6px 0 0; padding-left: 20px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+  <div class="doc-head">
+    <div>
+      <div class="kicker">IOTx · design plan v1</div>
+      <h1>One home for every IOTx app, <em>with permissions down to the switch</em></h1>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Views">
+      <button role="tab" id="tab-proto" aria-selected="true" data-view="proto">Prototype</button>
+      <button role="tab" id="tab-perm" aria-selected="false" data-view="perm">Permission model</button>
+      <button role="tab" id="tab-plan" aria-selected="false" data-view="plan">Build plan</button>
+    </div>
+  </div>
+
+  <!-- ═══ PROTOTYPE ═══ -->
+  <section class="view" id="view-proto">
+    <div class="controls">
+      <label for="as-role">Preview as
+        <select id="as-role"></select>
+      </label>
+      <span class="seg" role="group" aria-label="Device"><button id="dev-desk" aria-pressed="true">Desktop</button><button id="dev-phone" aria-pressed="false">Phone</button></span>
+      <span class="hint">Try: the nine dots (Ctrl+J), the sun icon for themes, Admin → Roles to flip a switch, then switch "Preview as"</span>
+    </div>
+    <div class="proto-scroll">
+      <div class="proto" id="proto" data-pt="light" data-acc="indigo">
+        <div class="shell">
+          <aside class="side" id="side" aria-label="Sidebar"></aside>
+          <div class="main">
+            <div class="topbar">
+              <button class="iconbtn burger" id="burger" aria-label="Open sidebar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+              <div class="search" id="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>Search or ask IOTx…</span><kbd>Ctrl K</kbd></div>
+              <span class="sp"></span>
+              <button class="iconbtn" id="btn-launch" aria-label="All apps" aria-haspopup="dialog" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="5" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="19" cy="19" r="2"/></svg></button>
+              <button class="iconbtn" id="btn-theme" aria-label="Theme" aria-haspopup="menu" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+              <button class="iconbtn" aria-label="Notifications" style="position:relative"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/></svg><span class="dot"></span></button>
+              <div class="avatar" id="top-avatar" title="Account">K</div>
+            </div>
+            <div class="canvas" id="canvas"></div>
+          </div>
+        </div>
+        <div class="scrim" id="scrim"></div>
+        <div class="launcher" id="launcher" role="dialog" aria-label="All IOTx apps"></div>
+        <div class="menu theme-menu" id="theme-menu" role="menu" aria-label="Theme">
+          <div class="mlabel">Appearance</div>
+          <div class="row"><button data-pt="light">Light</button><button data-pt="dark">Dark</button><button data-pt="system">System</button></div>
+          <div class="mlabel">Accent</div>
+          <div class="row" style="justify-content:space-between;padding:0 4px">
+            <button class="swatch" data-acc="indigo" aria-label="Indigo" style="background:linear-gradient(135deg,#4f46e5,#8b5cf6)"></button>
+            <button class="swatch" data-acc="ember" aria-label="Ember" style="background:linear-gradient(135deg,#e8590c,#f59f00)"></button>
+            <button class="swatch" data-acc="teal" aria-label="Teal" style="background:linear-gradient(135deg,#0d9488,#22b8cf)"></button>
+            <button class="swatch" data-acc="graphite" aria-label="Graphite" style="background:linear-gradient(135deg,#2b2f45,#6b7194)"></button>
+          </div>
+          <div class="mlabel" style="padding-bottom:4px">Saved to your account, on every device</div>
+        </div>
+        <div class="toast" id="toast" role="status"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ PERMISSION MODEL ═══ -->
+  <section class="view doc" id="view-perm" hidden>
+    <h2>How permissions work</h2>
+    <p class="lead">Every switch an admin sees comes from one rule: <b>a person can do something only if their plan includes it, one of their roles grants it, nothing denies it, and (for a specific file or record) they have access to that item.</b> Every app follows the same rule, from the builder to the ledger.</p>
+
+    <h3>Five layers, checked in order</h3>
+    <div class="layers">
+      <div class="layer"><div><span class="k">1 · Plan</span><b>What the company bought</b></div><div>The organization's subscription sets the ceiling. A feature not in the plan shows as locked with "Upgrade" in the admin screen and can't be granted to anyone.</div></div>
+      <div class="layer"><div><span class="k">2 · App access</span><b>Can they open the app?</b></div><div>On or off per role. When it's off, the app disappears from the sidebar, the nine-dot launcher, search and AI answers.</div></div>
+      <div class="layer"><div><span class="k">3 · Features</span><b>What they can do inside it</b></div><div>One switch per feature: "Publish", "SQL editor", "Delete sales voucher", "Export sheet". Some features take a limit instead of on/off: an amount ceiling for vouchers, monthly AI credits, a date range for back-dated entries.</div></div>
+      <div class="layer"><div><span class="k">4 · Data scope</span><b>Which data they can touch</b></div><div>Which companies or branches in the ledger, which departments' folders, which projects. "Only their own" is a scope too (a sales executive sees only their own customers).</div></div>
+      <div class="layer"><div><span class="k">5 · Item sharing</span><b>This file, this app, this board</b></div><div>Owner, editor, commenter or viewer on a single document, sheet, built app or task board, as in Google Docs. Sharing can never give more than the role allows: a viewer role can't be made editor of a sheet.</div></div>
+    </div>
+
+    <h3>Roles</h3>
+    <ul>
+      <li><b>Built-in roles</b> that can't be deleted: Owner, Admin, Member, Guest.</li>
+      <li><b>Role templates</b> per industry, ready to copy and adjust: Accountant, Sales executive, Store keeper, Plant head, Dispatch clerk, Builder.</li>
+      <li><b>Custom roles</b> made from scratch or copied from any role.</li>
+      <li>A person can hold <b>several roles</b>; their permissions add up. A <b>deny</b> on a person (for example "never delete vouchers") wins over every grant.</li>
+      <li><b>Per-person exceptions and temporary access</b> ("give Anita the SQL editor until Friday") expire on their own.</li>
+      <li>Roles can be assigned to <b>departments and groups</b>, including groups from the company's sign-in system (SSO and SCIM, which the builder already supports).</li>
+    </ul>
+
+    <h3>How each app declares its features</h3>
+    <p>Each app ships a small permission list, its <b>manifest</b>. The admin screen builds its switches from it automatically, so a new feature in any app shows up as a new switch without changing the admin screen.</p>
+<pre class="code">{
+  "app": "ledger",
+  "name": "Ledger",
+  "features": [
+    { "key": "ledger.voucher.sales.create",  "label": "Create sales vouchers",  "group": "Vouchers", "default": ["Accountant"] },
+    { "key": "ledger.voucher.sales.delete",  "label": "Delete sales vouchers",  "group": "Vouchers", "risk": "high" },
+    { "key": "ledger.voucher.amount_limit",  "label": "Largest voucher amount", "type": "limit", "unit": "INR" },
+    { "key": "ledger.backdate.days",         "label": "Back-dated entries",     "type": "limit", "unit": "days" },
+    { "key": "ledger.reports.balance_sheet", "label": "Balance sheet",          "group": "Reports" }
+  ],
+  "scopes": [ { "key": "company", "label": "Companies" }, { "key": "branch", "label": "Branches" } ]
+}</pre>
+
+    <h3>Where the checks happen</h3>
+    <ul>
+      <li><b>The screen hides what you can't use.</b> Buttons, menu items and apps a person can't use aren't shown. Where hiding would confuse, they show greyed out with "Ask your admin".</li>
+      <li><b>The server refuses it anyway.</b> Every app's server checks the same permission before acting, so a hidden button can't be worked around.</li>
+      <li><b>One sign-in, one permission service.</b> When someone signs in, the platform gives each app a short-lived pass listing their roles. Apps ask the platform's permission service when they need a decision, and cache the answer for a few seconds.</li>
+      <li><b>Everything is logged.</b> Who changed which switch, who was refused what, and when. Admins can "Preview as" any role before saving.</li>
+    </ul>
+
+    <h3>The feature switches, app by app</h3>
+    <p class="muted">The prototype's Admin screen shows these working; this is the full first list.</p>
+    <div class="tablewrap" id="catalog-table"></div>
+  </section>
+
+  <!-- ═══ BUILD PLAN ═══ -->
+  <section class="view doc" id="view-plan" hidden>
+    <h2>How to build the IOTx ecosystem</h2>
+    <p class="lead">Today there are separate apps: the Builder (<code>web/</code>), Sheets (<code>apps/sheets</code>), the Tally-style Ledger (<code>apps/tally</code>), Books (<code>zoho-books</code>), and the Docs and Slides engines (<code>suite/wordcraft</code>, <code>suite/deckcraft</code>). The plan is to put one platform underneath all of them and one shell around them, so they feel like a single product.</p>
+
+    <h3>The three parts</h3>
+    <div class="cards">
+      <div class="c"><div class="k">Part 1</div><h4>IOTx Platform</h4><p>One place for accounts and sign-in, organizations and departments, roles and permissions, the app list, billing and plans, the audit log, notifications, search and the AI. Every app uses it; none keeps its own users.</p></div>
+      <div class="c"><div class="k">Part 2</div><h4>IOTx Shell</h4><p>What you see in the prototype: the sidebar, top bar, nine-dot launcher, theme, search and notifications. Every app sits inside it, so moving from Sheets to the Ledger feels like one product.</p></div>
+      <div class="c"><div class="k">Part 3</div><h4>The apps</h4><p>Builder, Sheets, Docs, Slides, Ledger, Books, Tasks, Files, Notes, Chat, Mail, Calendar, Meetings, Read and Store. Each keeps its own engine and declares its features in a permission manifest.</p></div>
+    </div>
+
+    <h3>Decisions I recommend</h3>
+    <div class="tablewrap"><table class="t"><thead><tr><th>Decision</th><th>Recommendation</th><th>Why</th></tr></thead><tbody>
+      <tr><td>Where the platform lives</td><td>Grow it out of the Builder (<code>web/</code>)</td><td>It already has users, workspaces, organizations, roles, SSO, SCIM, API keys, audit logs and billing, all tested.</td></tr>
+      <tr><td>Sign-in across apps</td><td>The platform signs everyone in; apps receive a short-lived pass (OIDC/JWT)</td><td>One login for every app. The Builder already speaks OIDC.</td></tr>
+      <tr><td>Addresses</td><td><code>iotx.app</code> for the shell, <code>app.iotx.app/sheets</code>, <code>/ledger</code>… under one domain</td><td>One session cookie, no cross-site sign-in problems, simple for clients.</td></tr>
+      <tr><td>Shared look</td><td>One design system package (colours, type, components, icons) used by every app</td><td>Each app is built separately today; a shared package makes them match.</td></tr>
+      <tr><td>Permission storage</td><td>Platform database: roles, grants, denies, scopes, item shares</td><td>One source of truth; apps never keep their own role tables.</td></tr>
+      <tr><td>Data</td><td>Each app keeps its own database; the organization ID is on every record</td><td>Apps stay independent and can scale on their own; one organization never sees another's data.</td></tr>
+    </tbody></table></div>
+
+    <h3>Build order</h3>
+    <div class="phases">
+      <div class="phase"><div class="when">Step 1</div><div><h4>Design system and shell</h4><ul><li>Lock colours, type, icons, spacing and components from this prototype, in light and dark with four accents.</li><li>Build the shell: sidebar, top bar, launcher, theme, search, notifications, account menu, phone layout.</li></ul></div></div>
+      <div class="phase"><div class="when">Step 2</div><div><h4>Platform: identity and permissions</h4><ul><li>Organizations, departments, people, roles, role templates, custom roles, denies, temporary access.</li><li>The permission service, the manifest format and the auto-generated admin screen with "Preview as".</li><li>Sign-in pass for apps; audit log for every change.</li></ul></div></div>
+      <div class="phase"><div class="when">Step 3</div><div><h4>Home and the Builder</h4><ul><li>The home page in the prototype becomes the real landing page after login.</li><li>Map every Builder feature to a switch (the list in the Permission model tab) and enforce them.</li></ul></div></div>
+      <div class="phase"><div class="when">Step 4</div><div><h4>Sheets joins</h4><ul><li>Add accounts and permissions (its README says it has none yet): open, edit, share, export, AI, scripts.</li><li>Sheets as a data source for built apps.</li></ul></div></div>
+      <div class="phase"><div class="when">Step 5</div><div><h4>Ledger and Books join</h4><ul><li>Sign-in through the platform; companies and branches as data scopes.</li><li>Voucher-level switches (create, alter, delete, approve per voucher type), amount limits, back-dating limits, period locks, report access.</li></ul></div></div>
+      <div class="phase"><div class="when">Step 6</div><div><h4>Docs, Slides, Tasks, Files, Notes</h4><ul><li>Web apps on the wordcraft and deckcraft engines; Tasks with boards and sprints; Files with department folders.</li></ul></div></div>
+      <div class="phase"><div class="when">Step 7</div><div><h4>Chat, Mail, Calendar, Meetings, Read, Store</h4><ul><li>Connect Google or Microsoft mail and calendar first; IOTx's own later.</li><li>Store with company apps and IOTx templates; "Add new" for outside apps.</li></ul></div></div>
+    </div>
+
+    <div class="q"><b>Questions for you before I start Step 1</b><ol>
+      <li>Is <b>IOTx</b> the final product name, and do you have a logo, or should I design one?</li>
+      <li>Which accent should be the default: indigo (as in your reference), or another?</li>
+      <li>Should the Ledger be a separate app in the launcher (like Tally), with Books as its "online" version, or one app?</li>
+      <li>One domain for everything (recommended), or does each app need its own address?</li>
+      <li>Who can create roles: only the owner, or any admin?</li>
+    </ol></div>
+  </section>
+</div>
+
+<script>
+(() => {
+  // ── Icons (simple strokes) ──
+  const P = {
+    builder: '<path d="M12 3l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L4.8 8.3l5-.7z"/>',
+    docs: '<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 16h5"/>',
+    sheets: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M4 15h16M10 4v16"/>',
+    slides: '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M12 17v3M8 20h8"/>',
+    store: '<path d="M5 8h14l-1 12H6z"/><path d="M9 8a3 3 0 0 1 6 0"/>',
+    chat: '<path d="M4 5h16v11H9l-5 4z"/>',
+    mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+    meet: '<rect x="3" y="7" width="12" height="10" rx="2"/><path d="m15 11 6-3v8l-6-3"/>',
+    calendar: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+    files: '<path d="M3 7h6l2 2h10v10H3z"/>',
+    notes: '<path d="M6 3h12v18H6z"/><path d="M9 8h6M9 12h6M9 16h4"/>',
+    tasks: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 12 3 3 5-6"/>',
+    read: '<path d="M4 5h6a2 2 0 0 1 2 2v13a2 2 0 0 0-2-2H4z"/><path d="M20 5h-6a2 2 0 0 0-2 2v13a2 2 0 0 1 2-2h6z"/>',
+    ledger: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h2M14 15h1"/>',
+    add: '<path d="M12 5v14M5 12h14"/>',
+    admin: '<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="m9 12 2 2 4-4"/>',
+    home: '<path d="M4 11 12 4l8 7v9H4z"/><path d="M10 20v-5h4v5"/>',
+    chatline: '<path d="M5 6h14M5 12h10M5 18h7"/>',
+  };
+  const svg = (k, w = 20) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[k]}</svg>`;
+
+  // ── Apps ──
+  const APPS = [
+    { id: "builder", name: "Builder", desc: "Create custom apps", color: "linear-gradient(135deg,#4f46e5,#8b5cf6)" },
+    { id: "docs", name: "Docs", desc: "Write documents", color: "linear-gradient(135deg,#2563eb,#60a5fa)" },
+    { id: "sheets", name: "Sheets", desc: "Manage data", color: "linear-gradient(135deg,#059669,#34d399)" },
+    { id: "slides", name: "Slides", desc: "Presentations", color: "linear-gradient(135deg,#d97706,#fbbf24)" },
+    { id: "ledger", name: "Ledger", desc: "Accounts & GST", color: "linear-gradient(135deg,#0f766e,#14b8a6)" },
+    { id: "store", name: "Store", desc: "Templates & apps", color: "linear-gradient(135deg,#e11d48,#fb7185)" },
+    { id: "chat", name: "AI Chat", desc: "Your AI assistant", color: "linear-gradient(135deg,#7c3aed,#c084fc)" },
+    { id: "mail", name: "Mail", desc: "Email", color: "linear-gradient(135deg,#dc2626,#f87171)" },
+    { id: "meet", name: "Meetings", desc: "Video meetings", color: "linear-gradient(135deg,#0284c7,#38bdf8)" },
+    { id: "calendar", name: "Calendar", desc: "Your schedule", color: "linear-gradient(135deg,#4338ca,#818cf8)" },
+    { id: "files", name: "Files", desc: "Store & organize", color: "linear-gradient(135deg,#2563eb,#93c5fd)" },
+    { id: "notes", name: "Notes", desc: "Quick notes", color: "linear-gradient(135deg,#9333ea,#e879f9)" },
+    { id: "tasks", name: "Tasks", desc: "Boards & sprints", color: "linear-gradient(135deg,#16a34a,#4ade80)" },
+    { id: "read", name: "Read", desc: "Knowledge hub", color: "linear-gradient(135deg,#1d4ed8,#6366f1)" },
+    { id: "add", name: "Add new", desc: "Connect an app", color: "linear-gradient(135deg,#64748b,#94a3b8)" },
+  ];
+
+  // ── Feature catalog (keys are what each app's manifest declares) ──
+  const CATALOG = {
+    home: { name: "Home & AI", groups: { "Asking IOTx": [["home.ask", "Ask IOTx"], ["home.web", "Web search"], ["home.deep_research", "Deep Research", "plan:Business"], ["home.attach", "Attach files"]] } },
+    builder: { name: "Builder", groups: {
+      Projects: [["builder.project.create", "Create projects"], ["builder.project.delete", "Delete projects", "risk"], ["builder.project.transfer", "Move projects between folders and workspaces"]],
+      Building: [["builder.build", "Build mode (changes the app)"], ["builder.plan", "Plan mode"], ["builder.visual_edit", "Visual edits"], ["builder.code.view", "View code"], ["builder.code.edit", "Edit code"], ["builder.images", "Generate images"]],
+      Publishing: [["builder.publish", "Publish"], ["builder.domain", "Custom domains", "plan:Business"], ["builder.preview_links", "Preview links"], ["builder.security.override", "Publish despite security findings", "risk"]],
+      "Cloud (backend)": [["builder.cloud.enable", "Turn on Cloud"], ["builder.cloud.rows", "Edit database rows"], ["builder.cloud.sql", "SQL editor", "risk"], ["builder.cloud.storage", "Storage"], ["builder.cloud.functions", "Server functions"], ["builder.cloud.jobs", "Jobs and workflows"], ["builder.cloud.users", "Manage app users"], ["builder.cloud.secrets", "Secrets"]],
+      Integrations: [["builder.connectors", "Use connectors"], ["builder.github", "GitHub sync"], ["builder.api_keys", "API keys and MCP"], ["builder.browser", "Cloud browser"]],
+      Limits: [["builder.credits.monthly", "AI credits per month", "limit:credits"]],
+    } },
+    sheets: { name: "Sheets", groups: {
+      Workbooks: [["sheets.create", "Create workbooks"], ["sheets.edit", "Edit"], ["sheets.comment", "Comment"], ["sheets.delete", "Delete", "risk"]],
+      Sharing: [["sheets.share.internal", "Share inside the company"], ["sheets.share.external", "Share outside the company", "risk"], ["sheets.export", "Download / export"], ["sheets.import", "Import files"]],
+      Power: [["sheets.ai", "AI formulas and analysis"], ["sheets.pivot", "Pivots and charts"], ["sheets.scripts", "Scripts and automations", "plan:Business"], ["sheets.history.restore", "Restore old versions"]],
+    } },
+    docs: { name: "Docs", groups: { Documents: [["docs.create", "Create"], ["docs.edit", "Edit"], ["docs.suggest", "Suggest changes"], ["docs.share.external", "Share outside the company", "risk"], ["docs.export", "Export to PDF and Word"], ["docs.ai", "AI writing"]] } },
+    slides: { name: "Slides", groups: { Decks: [["slides.create", "Create"], ["slides.edit", "Edit"], ["slides.present", "Present"], ["slides.export", "Export"], ["slides.ai", "Generate decks with AI"]] } },
+    ledger: { name: "Ledger", vouchers: ["Sales", "Purchase", "Receipt", "Payment", "Journal", "Contra", "Credit note", "Debit note"], groups: {
+      Companies: [["ledger.company.view", "Open assigned companies"], ["ledger.company.create", "Create companies", "risk"]],
+      Masters: [["ledger.masters.view", "View ledgers, groups and stock items"], ["ledger.masters.create", "Create masters"], ["ledger.masters.alter", "Alter masters"], ["ledger.masters.delete", "Delete masters", "risk"]],
+      Reports: [["ledger.reports.daybook", "Day book"], ["ledger.reports.trial", "Trial balance"], ["ledger.reports.pl", "Profit and loss"], ["ledger.reports.bs", "Balance sheet"], ["ledger.reports.gst", "GST returns"], ["ledger.reports.stock", "Stock summary"]],
+      Controls: [["ledger.amount_limit", "Largest voucher amount", "limit:INR"], ["ledger.backdate", "Back-dated entries up to", "limit:days"], ["ledger.period_unlock", "Unlock a closed period", "risk"], ["ledger.audit", "View audit trail"], ["ledger.export", "Export data"]],
+    } },
+    tasks: { name: "Tasks", groups: { Work: [["tasks.board.create", "Create boards"], ["tasks.create", "Create tasks"], ["tasks.assign", "Assign to others"], ["tasks.sprints", "Plan sprints"], ["tasks.workflow", "Change board workflow"], ["tasks.delete", "Delete tasks", "risk"]] } },
+    files: { name: "Files", groups: { Files: [["files.upload", "Upload"], ["files.share.external", "Share links outside the company", "risk"], ["files.delete", "Delete", "risk"], ["files.restricted", "See restricted folders"]] } },
+    store: { name: "Store", groups: { Store: [["store.use", "Use company apps"], ["store.install", "Install templates"], ["store.publish", "List apps in the company Store"]] } },
+    admin: { name: "Admin", groups: { Organization: [["admin.people", "Manage people"], ["admin.roles", "Manage roles and permissions", "risk"], ["admin.billing", "Billing and plans"], ["admin.audit", "Audit log"], ["admin.sso", "Sign-in and SSO", "risk"]] } },
+  };
+  const ACTIONS = ["create", "alter", "delete", "approve"];
+
+  // ── Roles: which apps they open, and which features they have ──
+  const allKeys = () => {
+    const out = [];
+    for (const a of Object.values(CATALOG)) for (const g of Object.values(a.groups)) for (const f of g) out.push(f[0]);
+    for (const v of CATALOG.ledger.vouchers) for (const act of ACTIONS) out.push(`ledger.voucher.${v.toLowerCase().replace(/ /g, "_")}.${act}`);
+    return out;
+  };
+  const ALL_APPS = APPS.map((a) => a.id).concat(["admin"]);
+  const vk = (v, a) => `ledger.voucher.${v.toLowerCase().replace(/ /g, "_")}.${a}`;
+  const ROLES = [
+    { id: "owner", name: "Owner", locked: true, apps: ALL_APPS, perms: new Set(allKeys()), limits: { "builder.credits.monthly": 5000, "ledger.amount_limit": 0, "ledger.backdate": 365 } },
+    { id: "admin", name: "Admin", apps: ALL_APPS, perms: new Set(allKeys().filter((k) => k !== "ledger.period_unlock")), limits: { "builder.credits.monthly": 2000, "ledger.amount_limit": 0, "ledger.backdate": 90 } },
+    { id: "builder", name: "Builder", apps: ["builder", "docs", "sheets", "slides", "store", "chat", "mail", "meet", "calendar", "files", "notes", "tasks", "read", "add"],
+      perms: new Set(allKeys().filter((k) => (k.startsWith("builder.") && !["builder.security.override", "builder.cloud.secrets", "builder.domain"].includes(k)) || k.startsWith("home.") || /^(sheets|docs|slides|tasks|files|store)\./.test(k)).filter((k) => !/share\.external|delete|store\.publish|files\.restricted/.test(k))), limits: { "builder.credits.monthly": 500 } },
+    { id: "accountant", name: "Accountant", apps: ["ledger", "sheets", "docs", "chat", "mail", "calendar", "files", "notes", "tasks", "read"],
+      perms: new Set(["home.ask", "home.attach", "sheets.create", "sheets.edit", "sheets.comment", "sheets.export", "sheets.pivot", "docs.create", "docs.edit", "docs.export", "tasks.create", "files.upload", "ledger.company.view", "ledger.masters.view", "ledger.masters.create", "ledger.masters.alter", "ledger.reports.daybook", "ledger.reports.trial", "ledger.reports.pl", "ledger.reports.bs", "ledger.reports.gst", "ledger.reports.stock", "ledger.export", ...CATALOG.ledger.vouchers.flatMap((v) => [vk(v, "create"), vk(v, "alter")])]), limits: { "ledger.amount_limit": 500000, "ledger.backdate": 7 } },
+    { id: "sales", name: "Sales executive", apps: ["chat", "mail", "calendar", "meet", "docs", "sheets", "files", "notes", "tasks", "store", "read"],
+      perms: new Set(["home.ask", "home.web", "home.attach", "docs.create", "docs.edit", "docs.ai", "sheets.edit", "sheets.comment", "tasks.create", "files.upload", "store.use"]), limits: {} },
+    { id: "dispatch", name: "Dispatch clerk", apps: ["chat", "tasks", "files", "read", "store"], perms: new Set(["home.ask", "tasks.create", "files.upload", "store.use"]), limits: {} },
+    { id: "guest", name: "Guest", apps: ["docs", "files"], perms: new Set(["docs.suggest"]), limits: {} },
+  ];
+  const PLAN = "Growth"; // features marked plan:Business are locked on this plan
+
+  // ── State ──
+  const proto = document.getElementById("proto");
+  const S = { role: "admin", view: "home", ptheme: "light", followSystem: true, acc: "indigo", collapsed: false, editRole: "builder", editApp: "builder", phone: false };
+  try {
+    const saved = JSON.parse(localStorage.getItem("iotx-shell") || "{}");
+    Object.assign(S, { acc: saved.acc ?? S.acc, followSystem: saved.followSystem ?? true, ptheme: saved.ptheme ?? S.ptheme });
+  } catch {}
+  const save = () => { try { localStorage.setItem("iotx-shell", JSON.stringify({ acc: S.acc, followSystem: S.followSystem, ptheme: S.ptheme })); } catch {} };
+  const role = () => ROLES.find((r) => r.id === S.role);
+  const can = (k) => role().perms.has(k);
+  const opens = (app) => role().apps.includes(app);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const appById = (id) => APPS.find((a) => a.id === id);
+
+  function systemDark() {
+    const t = document.documentElement.getAttribute("data-theme");
+    if (t) return t === "dark";
+    return matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+  function applyTheme() {
+    proto.dataset.pt = S.followSystem ? (systemDark() ? "dark" : "light") : S.ptheme;
+    proto.dataset.acc = S.acc;
+    document.querySelectorAll("#theme-menu [data-pt]").forEach((b) => b.setAttribute("aria-pressed", String(S.followSystem ? b.dataset.pt === "system" : b.dataset.pt === S.ptheme)));
+    document.querySelectorAll("#theme-menu [data-acc]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.acc === S.acc)));
+  }
+
+  function toast(msg) {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toast.t);
+    toast.t = setTimeout(() => t.classList.remove("show"), 2200);
+  }
+
+  // ── Sidebar ──
+  const RECENT = ["Inventory system", "Production dashboard", "Client portal", "HR approval workflow", "Material purchase flow"];
+  function renderSide() {
+    const shared = ["sheets", "chat", "tasks", "docs", "slides", "files"].filter(opens);
+    const side = document.getElementById("side");
+    side.innerHTML = `
+      <div class="brand"><div class="mark">IX</div><b>IOTx</b><span style="flex:1"></span>
+        <button class="iconbtn" id="collapse" aria-label="${S.collapsed ? "Expand" : "Collapse"} sidebar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button></div>
+      ${can("home.ask") ? `<button class="newchat" id="newchat">${svg("add", 16)}<span>New chat</span></button>` : ""}
+      <div class="navlist">
+        <button class="nav ${S.view === "home" ? "on" : ""}" data-go="home"><span class="ico">${svg("home", 17)}</span><span class="label">Home</span></button>
+        ${opens("admin") ? `<button class="nav ${S.view === "admin" ? "on" : ""}" data-go="admin"><span class="ico">${svg("admin", 17)}</span><span class="label">Admin · Roles</span></button>` : ""}
+      </div>
+      ${can("home.ask") ? `<div class="sect">Recent chats</div><div class="navlist">${RECENT.map((r, i) => `<button class="nav ${S.view === "chat" && i === 0 ? "on" : ""}" data-go="chat"><span class="ico" style="color:var(--p-muted)">${svg("chatline", 15)}</span><span class="label">${esc(r)}</span></button>`).join("")}<button class="nav dim"><span class="ico"></span><span class="label dim">Show more…</span></button></div>` : ""}
+      <div class="sect">Shared</div>
+      <div class="navlist">${shared.map((id) => { const a = appById(id); return `<button class="nav" data-app="${id}"><span class="ico" style="background:${a.color};color:#fff">${svg(id, 13)}</span><span class="label">${a.name}</span></button>`; }).join("")}
+        <button class="nav" style="color:var(--p-a)"><span class="ico">${svg("add", 15)}</span><span class="label">Create folder</span></button></div>
+      <div class="side-foot"><div class="avatar">K</div><div class="who"><b>Karan</b><span>${esc(role().name)} · Crystal Arc</span></div></div>`;
+  }
+
+  // ── Main views ──
+  function renderHome() {
+    const tools = [["Attach", "home.attach"], ["Search", "home.ask"], ["Web", "home.web"], ["Deep Research", "home.deep_research"]];
+    const quick = [
+      ["Build an inventory system", "builder", "builder.project.create"], ["Create a dashboard", "sheets", "sheets.create"], ["Analyze a spreadsheet", "sheets", "sheets.ai"],
+      ["Write a report", "docs", "docs.create"], ["Automate approvals", "builder", "builder.cloud.jobs"], ["Connect Google Sheets", "add", "builder.connectors"],
+    ].filter((q) => opens(q[1]) && can(q[2]));
+    const popular = APPS.filter((a) => a.id !== "add" && opens(a.id)).slice(0, 8);
+    const hour = new Date().getHours();
+    const greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+    return `<div class="aurora"></div>
+      <div class="hero">
+        <div class="greet">${greet}, Karan</div>
+        <h2>What would you like<br>to <em>build</em> today?</h2>
+        <p class="sub">Build apps, analyze data, write documents and automate work, or just ask. Everything in one place.</p>
+        ${can("home.ask") ? `<div class="prompt"><textarea id="ask" rows="2" placeholder="Ask IOTx or describe what you want to build…" aria-label="Ask IOTx"></textarea>
+          <div class="prompt-bar">${tools.map(([n, k]) => {
+            const planLocked = k === "home.deep_research" && PLAN !== "Business";
+            const ok = can(k) && !planLocked;
+            return `<button class="tool ${ok ? "" : "locked"}" ${ok ? "" : `title="${planLocked ? "Not in your plan" : "Ask your admin"}" aria-disabled="true"`} data-tool="${n}">${n}${planLocked ? " · Business" : ""}</button>`;
+          }).join("")}<button class="send" id="send" aria-label="Send"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></div></div>` : `<div class="prompt" style="padding:16px;color:var(--p-muted)">Asking IOTx isn't turned on for your role. Your apps are below.</div>`}
+        ${quick.length ? `<div class="quick">${quick.map(([t, app]) => `<button class="qa" data-q="${esc(t)}"><span class="appico" style="width:28px;height:28px;border-radius:8px;background:${appById(app).color}">${svg(app, 14)}</span>${esc(t)}</button>`).join("")}</div>` : ""}
+      </div>
+      <div class="apps-row"><h3>Your apps <span>${popular.length} of ${APPS.length - 1} for ${esc(role().name)}</span></h3>
+        <div class="app-tiles">${popular.map((a) => `<button class="tile" data-app="${a.id}"><span class="appico" style="background:${a.color}">${svg(a.id)}</span>${a.name}</button>`).join("")}</div></div>`;
+  }
+
+  function renderChat() {
+    return `<div class="aurora" style="opacity:.5"></div><div class="chatview">
+      <div style="font:600 18px var(--ui)">Inventory system <span style="font:12px var(--mono);color:var(--p-muted)">· 4 messages · today 10:24</span></div>
+      <div class="bubble me">Build an inventory management system for my fabrication unit. Track materials, suppliers, purchase orders and stock movements.</div>
+      <div class="bubble ai"><b>IOTx</b><p style="margin:6px 0">I can do that. A few details first so it fits how you work:</p>
+        <div style="display:grid;gap:6px">${["What types of materials do you manage?", "Do you track more than one warehouse?", "Do purchase orders need approval?", "Which reports matter most to you?"].map((q, i) => `<div class="step"><i>${i + 1}</i>${q}</div>`).join("")}</div></div>
+      <div class="bubble me">Steel coils and sheets, 2 yards, POs over ₹2 lakh need the plant head's approval. Stock and pending POs.</div>
+      <div class="bubble ai"><b>IOTx</b><div style="display:grid;gap:5px;margin-top:6px">${["Product and material catalogue", "Two yards with stock by location", "Purchase orders with approval over ₹2,00,000", "Stock in/out tracking", "Low-stock alerts", "Dashboard: stock and pending POs"].map((s) => `<div class="step"><i>✓</i>${s}</div>`).join("")}</div>
+        <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">${can("builder.publish") ? `<button class="qa" style="padding:6px 10px">Looks good, publish it</button>` : `<span class="lock">Publishing needs a role with "Publish"</span>`}<button class="qa" style="padding:6px 10px">Add approval workflow</button></div></div>
+      ${can("home.ask") ? `<div class="prompt"><textarea rows="1" placeholder="Ask IOTx to change something…" aria-label="Message"></textarea><div class="prompt-bar"><button class="tool">Attach</button><button class="tool">Web</button><button class="send" aria-label="Send"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></div></div>` : ""}
+    </div>`;
+  }
+
+  function featureRows(r, appId) {
+    const cat = CATALOG[appId];
+    const rowsFor = (items) => items.map(([k, label, tag]) => {
+      const planLocked = tag && tag.startsWith("plan:") && PLAN !== tag.slice(5);
+      const risk = tag === "risk";
+      if (tag && tag.startsWith("limit:")) {
+        const unit = tag.slice(6);
+        const v = r.limits[k] ?? "";
+        return `<div class="frow"><div class="fname">${label}${risk ? ' <span class="pchip" style="background:#fde4e1;color:#b3261e">risky</span>' : ""}<small>${k}</small></div><input type="number" min="0" data-limit="${k}" value="${v}" placeholder="${unit === "INR" ? "No limit" : "0"}" aria-label="${label} (${unit})" ${r.locked ? "disabled" : ""}><span class="hint">${unit === "INR" ? "₹" : unit}</span></div>`;
+      }
+      return `<div class="frow"><div class="fname">${label}${risk ? ' <span class="pchip" style="background:#fde4e1;color:#b3261e">risky</span>' : ""}<small>${k}</small></div>${planLocked ? `<span class="lock">${tag.slice(5)} plan</span>` : ""}<label class="sw"><input type="checkbox" data-perm="${k}" ${r.perms.has(k) && !planLocked ? "checked" : ""} ${r.locked || planLocked ? "disabled" : ""} aria-label="${label}"><i></i></label></div>`;
+    }).join("");
+    let html = Object.entries(cat.groups).map(([g, items]) => `<div class="fgroup"><h5>${g}<span>${items.filter((f) => r.perms.has(f[0])).length}/${items.length} on</span></h5>${rowsFor(items)}</div>`).join("");
+    if (appId === "ledger") {
+      html = `<div class="fgroup"><h5>Vouchers<span>per type and action</span></h5><div style="overflow-x:auto"><table class="vmatrix"><thead><tr><th>Voucher type</th>${ACTIONS.map((a) => `<th>${a}</th>`).join("")}</tr></thead><tbody>${cat.vouchers.map((v) => `<tr><td>${v}</td>${ACTIONS.map((a) => { const k = vk(v, a); return `<td><label class="sw" style="display:inline-block"><input type="checkbox" data-perm="${k}" ${r.perms.has(k) ? "checked" : ""} ${r.locked ? "disabled" : ""} aria-label="${v}: ${a}"><i></i></label></td>`; }).join("")}</tr>`).join("")}</tbody></table></div></div>` + html;
+    }
+    return html;
+  }
+
+  function renderAdmin() {
+    const r = ROLES.find((x) => x.id === S.editRole);
+    const tabs = Object.keys(CATALOG);
+    const appOn = S.editApp === "home" ? true : r.apps.includes(S.editApp);
+    const appMeta = appById(S.editApp);
+    return `<div class="admin">
+      <div class="rolelist" role="tablist" aria-label="Roles">${ROLES.map((x) => `<button class="rolebtn ${x.id === S.editRole ? "on" : ""}" data-role="${x.id}">${esc(x.name)}<span>${x.perms.size}</span></button>`).join("")}
+        <button class="rolebtn" style="color:var(--p-a)" id="new-role">+ New role</button></div>
+      <div class="perm">
+        <div class="perm-head"><h3>${esc(r.name)}</h3>${r.locked ? '<span class="pchip">Built-in · always everything</span>' : '<span class="pchip">Custom role</span>'}<span class="pchip" style="background:var(--p-hover);color:var(--p-muted)">Plan: ${PLAN}</span><span style="flex:1"></span>
+          <button class="qa" id="preview-as" style="padding:6px 10px">Preview as ${esc(r.name)}</button></div>
+        <div class="apptabs">${tabs.map((t) => { const a = appById(t); const bg = a ? a.color : "linear-gradient(135deg,#334155,#64748b)"; const ic = a ? t : t === "home" ? "home" : "admin"; return `<button class="apptab ${t === S.editApp ? "on" : ""}" data-edit-app="${t}"><span class="mini" style="background:${bg}">${svg(ic, 11)}</span>${CATALOG[t].name}</button>`; }).join("")}</div>
+        ${S.editApp !== "home" ? `<div class="access-card"><span class="appico" style="width:34px;height:34px;border-radius:10px;background:${appMeta ? appMeta.color : "linear-gradient(135deg,#334155,#64748b)"}">${svg(appMeta ? S.editApp : "admin", 17)}</span><div style="flex:1"><b>Open ${CATALOG[S.editApp].name}</b><div class="hint">When off, it disappears from the sidebar, launcher, search and AI answers.</div></div><label class="sw"><input type="checkbox" id="app-access" ${appOn ? "checked" : ""} ${r.locked ? "disabled" : ""} aria-label="Open ${CATALOG[S.editApp].name}"><i></i></label></div>` : ""}
+        <div style="${appOn ? "" : "opacity:.45;pointer-events:none"}">${featureRows(r, S.editApp)}</div>
+        ${S.editApp === "ledger" ? `<div class="fgroup"><h5>Data scope</h5><div class="frow"><div class="fname">Companies<small>scope: company</small></div><select aria-label="Companies"><option>All companies</option><option ${r.id === "accountant" ? "selected" : ""}>Crystal Arc Pvt Ltd only</option><option>Assigned per person</option></select></div><div class="frow"><div class="fname">Branches<small>scope: branch</small></div><select aria-label="Branches"><option>All branches</option><option>Pune</option><option>Ahmedabad</option></select></div></div>` : ""}
+      </div></div>`;
+  }
+
+  function renderMain() {
+    const c = document.getElementById("canvas");
+    if (S.view === "admin" && !opens("admin")) S.view = "home";
+    c.innerHTML = S.view === "admin" ? renderAdmin() : S.view === "chat" ? renderChat() : renderHome();
+  }
+
+  function renderLauncher(filter = "") {
+    const f = filter.toLowerCase();
+    const list = APPS.filter((a) => !f || a.name.toLowerCase().includes(f) || a.desc.toLowerCase().includes(f));
+    const mine = list.filter((a) => opens(a.id));
+    document.getElementById("launcher").innerHTML = `<div style="display:flex;align-items:start"><div style="flex:1"><h4>IOTx Apps</h4><div class="sub2">${mine.length} apps for ${esc(role().name)} · everything your business needs in one place</div></div><button class="iconbtn" id="close-launch" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+      <div class="lsearch">${'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>'}<input id="lfilter" placeholder="Search apps…" value="${esc(filter)}" aria-label="Search apps"></div>
+      <div class="lgrid">${mine.map((a) => `<button class="lapp" data-app="${a.id}"><span class="appico" style="background:${a.color}">${svg(a.id)}</span>${a.name}<small>${a.desc}</small></button>`).join("") || '<div class="sub2" style="grid-column:1/-1;padding:12px">No apps match.</div>'}</div>`;
+  }
+
+  function render() {
+    applyTheme();
+    proto.classList.toggle("collapsed", S.collapsed && !S.phone);
+    renderSide();
+    renderMain();
+    renderLauncher(document.getElementById("lfilter")?.value ?? "");
+  }
+
+  // ── Launcher and menus ──
+  const launchBtn = document.getElementById("btn-launch");
+  const themeBtn = document.getElementById("btn-theme");
+  const themeMenu = document.getElementById("theme-menu");
+  function setLauncher(open) {
+    proto.classList.toggle("lopen", open);
+    launchBtn.setAttribute("aria-expanded", String(open));
+    if (open) {
+      renderLauncher();
+      setTimeout(() => document.getElementById("lfilter")?.focus(), 30);
+    }
+  }
+  function setThemeMenu(open) {
+    themeMenu.classList.toggle("open", open);
+    themeBtn.setAttribute("aria-expanded", String(open));
+  }
+  launchBtn.addEventListener("click", () => { setThemeMenu(false); setLauncher(!proto.classList.contains("lopen")); });
+  themeBtn.addEventListener("click", (e) => { e.stopPropagation(); setThemeMenu(!themeMenu.classList.contains("open")); });
+  document.getElementById("scrim").addEventListener("click", () => { setLauncher(false); proto.classList.remove("drawer"); });
+  themeMenu.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    if (b.dataset.pt) {
+      S.followSystem = b.dataset.pt === "system";
+      if (!S.followSystem) S.ptheme = b.dataset.pt;
+    }
+    if (b.dataset.acc) S.acc = b.dataset.acc;
+    save();
+    applyTheme();
+  });
+  document.addEventListener("click", (e) => { if (!themeMenu.contains(e.target) && e.target !== themeBtn) setThemeMenu(false); });
+  document.addEventListener("keydown", (e) => {
+    if (document.getElementById("view-proto").hidden) return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "j") { e.preventDefault(); setLauncher(!proto.classList.contains("lopen")); }
+    if (e.key === "Escape") { setLauncher(false); setThemeMenu(false); proto.classList.remove("drawer"); }
+  });
+  proto.addEventListener("input", (e) => {
+    if (e.target.id === "lfilter") {
+      const pos = e.target.selectionStart;
+      renderLauncher(e.target.value);
+      const i = document.getElementById("lfilter");
+      i.focus();
+      i.setSelectionRange(pos, pos);
+    }
+  });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
+  new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  // ── Clicks inside the prototype ──
+  proto.addEventListener("click", (e) => {
+    const t = e.target;
+    const go = t.closest("[data-go]");
+    if (go) { S.view = go.dataset.go; proto.classList.remove("drawer"); return render(); }
+    if (t.closest("#collapse")) { S.collapsed = !S.collapsed; return render(); }
+    if (t.closest("#close-launch")) return setLauncher(false);
+    if (t.closest("#burger")) { proto.classList.toggle("drawer"); return; }
+    if (t.closest("#newchat") || t.closest("#send") || t.closest(".qa[data-q]")) { S.view = "chat"; setLauncher(false); return render(); }
+    const app = t.closest("[data-app]");
+    if (app) { setLauncher(false); toast(`Opening ${appById(app.dataset.app).name}…`); return; }
+    const tool = t.closest(".tool");
+    if (tool) {
+      if (tool.classList.contains("locked")) return toast(tool.title === "Not in your plan" ? "Deep Research is in the Business plan" : "Ask your admin to turn this on");
+      tool.classList.toggle("on");
+      return;
+    }
+    const rb = t.closest("[data-role]");
+    if (rb) { S.editRole = rb.dataset.role; return renderMain(); }
+    const at = t.closest("[data-edit-app]");
+    if (at) { S.editApp = at.dataset.editApp; return renderMain(); }
+    if (t.closest("#new-role")) {
+      const n = ROLES.filter((r) => r.id.startsWith("custom")).length + 1;
+      ROLES.push({ id: `custom${n}`, name: `New role ${n}`, apps: ["chat", "tasks", "files"], perms: new Set(["home.ask"]), limits: {} });
+      S.editRole = `custom${n}`;
+      fillRoleSelect();
+      toast("Role created. Turn on what it needs.");
+      return renderMain();
+    }
+    if (t.closest("#preview-as")) {
+      S.role = S.editRole;
+      document.getElementById("as-role").value = S.role;
+      S.view = "home";
+      toast(`Previewing as ${role().name}`);
+      return render();
+    }
+  });
+  proto.addEventListener("change", (e) => {
+    const r = ROLES.find((x) => x.id === S.editRole);
+    const t = e.target;
+    if (t.dataset.perm) {
+      if (t.checked) r.perms.add(t.dataset.perm); else r.perms.delete(t.dataset.perm);
+      toast(`${r.name}: ${t.getAttribute("aria-label")} ${t.checked ? "on" : "off"}`);
+      if (S.role === r.id) { renderSide(); }
+      document.querySelectorAll(".rolebtn[data-role] span").forEach((s) => { const x = ROLES.find((y) => y.id === s.parentElement.dataset.role); s.textContent = String(x.perms.size); });
+      return;
+    }
+    if (t.dataset.limit) { r.limits[t.dataset.limit] = Number(t.value) || 0; return toast(`${r.name}: limit saved`); }
+    if (t.id === "app-access") {
+      if (t.checked) { if (!r.apps.includes(S.editApp)) r.apps.push(S.editApp); } else r.apps = r.apps.filter((a) => a !== S.editApp);
+      toast(`${CATALOG[S.editApp].name} ${t.checked ? "shown to" : "hidden from"} ${r.name}`);
+      return render();
+    }
+  });
+
+  // ── Controls above the prototype ──
+  const sel = document.getElementById("as-role");
+  function fillRoleSelect() { sel.innerHTML = ROLES.map((r) => `<option value="${r.id}">${esc(r.name)}</option>`).join(""); sel.value = S.role; }
+  fillRoleSelect();
+  sel.addEventListener("change", () => { S.role = sel.value; render(); toast(`Previewing as ${role().name}`); });
+  const desk = document.getElementById("dev-desk"), phone = document.getElementById("dev-phone");
+  function setDevice(p) { S.phone = p; proto.classList.toggle("phone", p); desk.setAttribute("aria-pressed", String(!p)); phone.setAttribute("aria-pressed", String(p)); proto.classList.remove("drawer"); render(); }
+  desk.addEventListener("click", () => setDevice(false));
+  phone.addEventListener("click", () => setDevice(true));
+  if (matchMedia("(max-width: 700px)").matches) setDevice(true);
+
+  // ── Tabs ──
+  document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
+    document.querySelectorAll(".tabs button").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+    for (const v of ["proto", "perm", "plan"]) document.getElementById(`view-${v}`).hidden = v !== b.dataset.view;
+  }));
+
+  // ── Catalog table for the Permission model tab ──
+  const rows = [];
+  for (const [id, a] of Object.entries(CATALOG)) {
+    const groups = Object.entries(a.groups).map(([g, items]) => `<b>${g}:</b> ${items.map((f) => f[1]).join(", ")}`);
+    if (id === "ledger") groups.unshift(`<b>Vouchers:</b> create, alter, delete and approve, separately for ${a.vouchers.join(", ")}`);
+    rows.push(`<tr><td><b>${a.name}</b><br><code>${id}.*</code></td><td>${groups.join("<br>")}</td></tr>`);
+  }
+  document.getElementById("catalog-table").innerHTML = `<table class="t"><thead><tr><th>App</th><th>Feature switches</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+
+  render();
+})();
+</script>

@@ -1,0 +1,186 @@
+/*
+ * The suite as a browser (components/iotx/browser): tab strip, toolbar with
+ * the address bar, the apps sidebar, and one same-origin iframe per tab.
+ * Chrome's proportions: a 40px strip of 34px tabs (240px wide at most,
+ * shrinking as more open), the active tab joined to a 44px toolbar.
+ * Colours follow the theme and the account's accent.
+ */
+:root {
+  --ixb-strip: color-mix(in srgb, var(--accent, #4f46e5) 7%, #dfe1e8);
+  --ixb-bar: #ffffff;
+  --ixb-hover: color-mix(in srgb, #ffffff 50%, var(--ixb-strip));
+  --ixb-omni: color-mix(in srgb, var(--accent, #4f46e5) 4%, #eef0f5);
+  --ixb-sep: color-mix(in srgb, #14152b 22%, transparent);
+  --ixb-ink: #1f2133;
+  --ixb-dim: #5f6378;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ixb-strip: color-mix(in srgb, var(--accent, #4f46e5) 9%, #0b0c15); --ixb-bar: #1c1e31; --ixb-hover: color-mix(in srgb, #1c1e31 55%, var(--ixb-strip));
+    --ixb-omni: #121323; --ixb-sep: rgba(255, 255, 255, .16); --ixb-ink: #e8e9f6; --ixb-dim: #9a9ebd;
+  }
+}
+:root[data-theme="dark"] {
+  --ixb-strip: color-mix(in srgb, var(--accent, #4f46e5) 9%, #0b0c15); --ixb-bar: #1c1e31; --ixb-hover: color-mix(in srgb, #1c1e31 55%, var(--ixb-strip));
+  --ixb-omni: #121323; --ixb-sep: rgba(255, 255, 255, .16); --ixb-ink: #e8e9f6; --ixb-dim: #9a9ebd;
+}
+
+.ixb { height: 100dvh; width: 100%; display: flex; flex-direction: column; overflow: hidden; background: var(--ixb-strip); color: var(--ixb-ink); }
+
+/* ── Tab strip */
+.ixb-strip { flex: none; height: 40px; display: flex; align-items: flex-end; padding: 0 8px 0 8px; user-select: none; -webkit-user-select: none; }
+.ixb-tabs { flex: 1; min-width: 0; height: 100%; display: flex; align-items: flex-end; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; padding: 0 2px; }
+.ixb-tabs::-webkit-scrollbar { display: none; }
+.ixb-tab { container-type: inline-size; position: relative; flex: 0 1 240px; min-width: 52px; height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 12px; border-radius: 10px 10px 0 0; color: var(--ixb-dim); font: 500 12px/1 var(--font-sans), system-ui, sans-serif; cursor: default; outline: none; }
+.ixb-tab::after { content: ""; position: absolute; right: 0; top: 10px; bottom: 9px; width: 1px; background: var(--ixb-sep); }
+.ixb-tab:hover:not(.on) { color: var(--ixb-ink); }
+.ixb-tab:hover:not(.on)::before { content: ""; position: absolute; inset: 4px 3px 4px 2px; border-radius: 8px; background: var(--ixb-hover); z-index: -1; }
+.ixb-tab:hover::after, .ixb-tab.on::after, .ixb-tab.before-on::after, .ixb-tab:has(+ .ixb-tab:hover)::after, .ixb-tab:has(+ .ixb-new)::after { opacity: 0; }
+.ixb-tabs { isolation: isolate; }
+.ixb-tab.on { background: var(--ixb-bar); color: var(--ixb-ink); z-index: 2; }
+.ixb-tab:focus-visible .ixb-tab-title { text-decoration: underline; }
+.ixb-tab.drag { z-index: 3; box-shadow: 0 -2px 10px rgba(0, 0, 0, .12); }
+.ixb-tab.pinned { flex: none; width: 46px; min-width: 46px; padding: 0; justify-content: center; }
+/* The active tab's curved feet joining it to the toolbar. */
+.ixb-foot { position: absolute; bottom: 0; width: 10px; height: 10px; pointer-events: none; }
+.ixb-foot.l { left: -10px; background: radial-gradient(circle at 0 0, transparent 9.5px, var(--ixb-bar) 10px); }
+.ixb-foot.r { right: -10px; background: radial-gradient(circle at 100% 0, transparent 9.5px, var(--ixb-bar) 10px); }
+.ixb-fav { flex: none; display: inline-grid; place-items: center; border-radius: 4px; color: #fff; }
+.ixb-spin { flex: none; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); border-top-color: var(--accent); animation: mail-spin .8s linear infinite; box-sizing: border-box; }
+.ixb-tab-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent); line-height: 16px; }
+.ixb-x { flex: none; width: 20px; height: 20px; border-radius: 50%; border: 0; background: none; color: inherit; display: grid; place-items: center; cursor: pointer; padding: 0; opacity: .8; }
+.ixb-x:hover { background: color-mix(in srgb, var(--ixb-ink) 12%, transparent); opacity: 1; }
+/* Many tabs: titles go first, then the close button on inactive tabs (as Chrome does). */
+@container (max-width: 92px) { .ixb-tab-title { display: none; } }
+@container (max-width: 92px) { .ixb-fav, .ixb-spin { margin: 0 auto; } }
+.ixb-tab:not(.on) .ixb-x { visibility: visible; }
+@container (max-width: 70px) { .ixb-x { display: none; } }
+.ixb-tab.on .ixb-x { display: grid; }
+.ixb-new { flex: none; width: 28px; height: 28px; margin: 0 0 3px 6px; border: 0; border-radius: 50%; background: none; color: var(--ixb-dim); display: grid; place-items: center; cursor: pointer; align-self: center; margin-top: 3px; }
+.ixb-new:hover { background: var(--ixb-hover); color: var(--ixb-ink); }
+
+/* ── Toolbar */
+.ixb-toolbar { flex: none; height: 44px; display: flex; align-items: center; gap: 2px; padding: 0 8px; background: var(--ixb-bar); border-bottom: 1px solid var(--ix-line); position: relative; z-index: 30; }
+.ixb-nav { width: 32px; height: 32px; border-radius: 50%; border: 0; background: none; color: var(--ixb-dim); display: grid; place-items: center; cursor: pointer; flex: none; }
+.ixb-nav:hover:not(:disabled) { background: var(--ix-hover); color: var(--ixb-ink); }
+.ixb-nav:disabled { opacity: .35; cursor: default; }
+.ixb-actions { display: flex; align-items: center; gap: 2px; flex: none; margin-left: 6px; }
+.ixb-actions .ix-pop { top: 40px; right: 0; }
+.ixb-actions .ix-avatar { width: 28px; height: 28px; margin: 0 2px 0 4px; }
+.ixb-omni { position: relative; flex: 1; min-width: 0; height: 34px; margin: 0 6px; display: flex; align-items: center; border-radius: 17px; background: var(--ixb-omni); transition: background .12s, box-shadow .12s; }
+.ixb-omni:hover { background: color-mix(in srgb, var(--ixb-omni) 80%, var(--ixb-sep)); }
+.ixb-omni:focus-within { background: var(--ixb-bar); box-shadow: 0 0 0 2px var(--accent); }
+.ixb-omni[data-open] { border-radius: 17px 17px 0 0; box-shadow: 0 0 0 1px var(--ix-line), 0 6px 18px rgba(20, 21, 43, .14); }
+.ixb-omni-ico { flex: none; width: 34px; display: grid; place-items: center; color: var(--ixb-dim); }
+.ixb-omni-input { flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; color: var(--ixb-ink); font: 14px var(--font-sans), system-ui, sans-serif; padding: 0 14px 0 0; }
+.ixb-omni-input::placeholder { color: var(--ixb-dim); }
+.ixb-crumb { position: absolute; left: 34px; right: 14px; top: 0; bottom: 0; display: flex; align-items: center; gap: 7px; font: 14px var(--font-sans), system-ui, sans-serif; color: var(--ixb-ink); white-space: nowrap; overflow: hidden; cursor: text; }
+.ixb-crumb b { font-weight: 500; flex: none; }
+.ixb-crumb i { font-style: normal; color: var(--ixb-dim); }
+.ixb-crumb span { overflow: hidden; text-overflow: ellipsis; color: var(--ixb-dim); }
+.ixb-omni-busy { position: absolute; right: 12px; color: var(--ixb-dim); }
+.ixb-omni-results { position: absolute; top: 34px; left: 0; right: 0; background: var(--ixb-bar); border-radius: 0 0 16px 16px; box-shadow: 0 0 0 1px var(--ix-line), 0 14px 30px rgba(20, 21, 43, .2); padding: 6px 6px 4px; max-height: min(66vh, 560px); overflow-y: auto; z-index: 40; clip-path: inset(0 -40px -40px -40px); }
+.ixb-omni-tip { margin: 4px 0 0; padding: 6px 12px 4px; border-top: 1px solid var(--ix-line); font: 11px var(--font-mono), monospace; color: var(--ixb-dim); }
+
+/* ── Body: sidebar and the tabs' pages */
+.ixb-body { flex: 1; min-height: 0; display: flex; position: relative; background: var(--ix-bg); }
+.ixb-side { width: 236px; flex: none; display: flex; flex-direction: column; background: var(--ixb-bar); border-right: 1px solid var(--ix-line); min-width: 0; overflow: hidden; z-index: 20; transition: width .15s; }
+.ixb.collapsed .ixb-side { width: 60px; }
+.ixb-side-head { display: flex; align-items: center; gap: 6px; padding: 10px 10px 8px 12px; }
+.ixb-side-head .ix-brand-link b { font: 700 15px var(--font-sans); letter-spacing: -0.02em; white-space: nowrap; }
+.ixb-side-head .ix-brand-link b span { font-weight: 500; color: var(--ix-muted); }
+.ixb-side .ix-nav { position: relative; border-radius: 0 999px 999px 0; margin-left: -8px; padding: 6px 12px 6px 18px; width: calc(100% + 8px); }
+.ixb-side .ix-nav .ico .ix-appico { border-radius: 6px !important; }
+.ixb-side .ix-nav .ico .ix-appico svg { width: 12px; height: 12px; }
+.ixb-side .ix-sect { margin-top: 10px; }
+.ixb-side-badge { position: static; margin-left: auto; flex: none; }
+.ixb-side .ix-side-foot { border-top: 0; font-size: 11px; padding: 10px 16px; }
+.ixb-side .ix-side-foot .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ixb.collapsed .ixb-side .label, .ixb.collapsed .ixb-side .ix-sect:not(.ix-sect-line), .ixb.collapsed .ixb-side .ix-brand-link, .ixb.collapsed .ixb-side .ix-side-foot, .ixb.collapsed .ixb-side .ix-recentchats { display: none; }
+.ixb.collapsed .ixb-side-head { justify-content: center; padding: 10px 0 8px; }
+.ixb.collapsed .ixb-side .ix-nav { margin-left: 0; padding: 7px 0; border-radius: 10px; width: 100%; justify-content: center; }
+.ixb.collapsed .ixb-side-badge { position: absolute; top: 0; right: 4px; margin: 0; }
+.ixb-view { flex: 1; min-width: 0; position: relative; overflow: hidden; }
+.ixb-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: var(--ix-bg); visibility: hidden; pointer-events: none; }
+.ixb-frame.on { visibility: visible; pointer-events: auto; }
+.ixb-blocked { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 24px; background: var(--ix-bg); color: var(--ix-muted); }
+.ixb-blocked h2 { margin: 6px 0 0; font: 600 18px var(--font-sans); color: var(--ix-ink); }
+.ixb-blocked p { margin: 0 0 8px; max-width: 420px; }
+
+/* Menus and dialogs in the frame */
+.ixb .ix-launcher { top: 90px; right: 12px; }
+.ixb-menu { z-index: 70; padding: 6px; }
+.ixb-menu .ix-menuitem { padding: 6px 8px; font-size: 13px; }
+.ixb-menu .ix-menuitem:disabled { opacity: .45; cursor: default; background: none; }
+.ixb-menu-line { border-top: 1px solid var(--ix-line); margin: 5px 4px; }
+.ixb-keys { width: 440px; top: 90px; }
+.ixb-keys .sub2 { margin: 4px 0 10px; }
+.ixb-keytable { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ixb-keytable td { padding: 6px 4px; border-top: 1px solid var(--ix-line); }
+.ixb-keytable td:first-child { width: 46%; }
+.ixb-keytable kbd { font: 11.5px var(--font-mono), monospace; border: 1px solid var(--ix-line); border-bottom-width: 2px; border-radius: 6px; padding: 1px 6px; background: var(--ix-bg); white-space: nowrap; }
+
+/* Phone only / desktop only */
+.ixb-phone { display: none !important; }
+.ixb-count { width: 30px; height: 30px; border: 0; background: none; padding: 0; display: grid; place-items: center; cursor: pointer; color: var(--ixb-ink); flex: none; }
+.ixb-count span { min-width: 20px; height: 20px; padding: 0 3px; border: 2px solid currentColor; border-radius: 6px; display: grid; place-items: center; font: 700 11px/1 var(--font-sans); }
+.ixb-switcher { position: fixed; inset: 0; z-index: 75; background: var(--ix-bg); display: flex; flex-direction: column; }
+.ixb-switcher-bar { flex: none; height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 12px; background: var(--ixb-bar); border-bottom: 1px solid var(--ix-line); font-size: 15px; }
+.ixb-grid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 14px 16px 28px; align-content: start; }
+.ixb-card { position: relative; border-radius: 14px; background: var(--ixb-bar); border: 1px solid var(--ix-line); overflow: hidden; }
+.ixb-card.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.ixb-card-main { display: flex; flex-direction: column; width: 100%; border: 0; background: none; padding: 0; text-align: left; color: inherit; cursor: pointer; }
+.ixb-card-top { display: flex; align-items: center; gap: 7px; padding: 9px 34px 8px 10px; font: 500 12.5px var(--font-sans); min-width: 0; }
+.ixb-card-top > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ixb-card-body { height: 150px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 8px; }
+.ixb-card-body small { font: 10.5px var(--font-mono), monospace; color: var(--ix-muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ixb-card-x { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%; border: 0; background: none; color: var(--ix-muted); display: grid; place-items: center; cursor: pointer; }
+.ixb-card-x:hover { background: var(--ix-hover); color: var(--ix-ink); }
+
+@media (max-width: 759px) {
+  .ixb-strip { display: none; }
+  .ixb-phone { display: inline-grid !important; }
+  .ixb-desk { display: none !important; }
+  .ixb-toolbar { height: 52px; padding: 0 6px; gap: 0; }
+  .ixb-omni { height: 38px; border-radius: 19px; margin: 0 4px; }
+  .ixb-omni[data-open] { border-radius: 19px 19px 0 0; }
+  .ixb-omni-results { top: 38px; position: fixed; left: 8px; right: 8px; top: 48px; border-radius: 0 0 16px 16px; }
+  .ixb-actions { margin-left: 2px; }
+  .ixb-actions [data-launcher] { display: none; }
+  .ixb-side { position: fixed; top: 0; bottom: 0; left: 0; width: 280px !important; transform: translateX(-100%); transition: transform .2s; box-shadow: 20px 0 50px rgba(0, 0, 0, .2); z-index: 60; }
+  .ixb.drawer .ixb-side { transform: none; }
+  .ixb.drawer .ixb-scrim { display: block; position: fixed; inset: 0; z-index: 55; background: rgba(12, 13, 24, .3); }
+  .ixb.collapsed .ixb-side .label, .ixb.collapsed .ixb-side .ix-sect, .ixb.collapsed .ixb-side .ix-brand-link, .ixb.collapsed .ixb-side .ix-side-foot, .ixb.collapsed .ixb-side .ix-recentchats { display: revert; }
+  .ixb.collapsed .ixb-side .ix-brand-link { display: flex; }
+  .ixb.collapsed .ixb-side .ix-nav { margin-left: -8px; padding: 6px 12px 6px 18px; border-radius: 0 999px 999px 0; width: calc(100% + 8px); justify-content: flex-start; }
+  .ixb.collapsed .ixb-side-head { justify-content: flex-start; padding: 10px 10px 8px 12px; }
+  .ixb .ix-launcher { top: 56px; left: 10px; right: 10px; }
+  .ixb-keys { width: auto; }
+  /* Phones show just the page: the title when there is one, else the app. */
+  .ixb-crumb:has(span) b, .ixb-crumb i { display: none; }
+  .ixb-crumb span { color: var(--ixb-ink); }
+}
+
+/* New Tab page shortcuts (components/iotx/StartPage), like Chrome's. */
+.ix-shortcuts { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; width: 100%; max-width: 880px; margin-top: 30px; }
+.ix-shortcut { position: relative; width: 104px; display: flex; flex-direction: column; align-items: center; gap: 9px; padding: 14px 4px 10px; border-radius: 14px; color: var(--ix-ink); text-decoration: none; font: 500 12.5px var(--font-sans); text-align: center; transition: background .12s; }
+.ix-shortcut:hover, .ix-shortcut:focus-visible { background: color-mix(in srgb, var(--ix-hover) 85%, transparent); outline: none; }
+.ix-shortcut-ico { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--ix-panel) 92%, var(--ix-line)); box-shadow: 0 1px 2px rgba(20, 21, 43, .08); }
+.ix-shortcut .ix-appico { border-radius: 8px !important; }
+.ix-shortcut .ix-badge { top: 8px; right: 22px; }
+.ix-shortcut > span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 759px) { .ix-shortcuts { gap: 2px; margin-top: 22px; } .ix-shortcut { width: 25%; min-width: 74px; } }
+
+/* Dashboards and folders in the sidebar */
+.ix-sect-act { display: flex; align-items: center; justify-content: space-between; padding-right: 8px; }
+.ix-sect-add { border: 0; background: transparent; color: var(--ix-muted); width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; cursor: pointer; }
+.ix-sect-add:hover, .ix-sect-add:focus-visible { background: var(--ix-hover, rgba(127,127,127,.14)); color: var(--ix-text); }
+.ix-space-row { display: flex; align-items: center; min-width: 0; }
+.ix-space-row > .ix-nav { flex: 1; min-width: 0; }
+.ix-space-caret { border: 0; background: transparent; color: var(--ix-muted); width: 18px; height: 22px; display: grid; place-items: center; cursor: pointer; flex: none; margin-right: -4px; transition: transform .15s; }
+.ix-space-caret.open { transform: rotate(90deg); }
+.ix-space-new { padding: 2px 10px 6px; }
+.ix-space-new .ix-input { width: 100%; height: 30px; font-size: 13px; }
+.ix-space-empty { color: var(--ix-muted); background: transparent; border: 0; width: 100%; text-align: left; cursor: pointer; font: inherit; }
+.ixb.collapsed .ixb-side .ix-space-caret, .ixb.collapsed .ixb-side .ix-space-kids, .ixb.collapsed .ixb-side .ix-space-new, .ixb.collapsed .ixb-side .ix-space-empty, .ixb.collapsed .ixb-side .ix-sect-add { display: none; }
+.ixb.collapsed .ixb-side .ix-space-row { padding-left: 0 !important; }

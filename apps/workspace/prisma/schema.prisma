@@ -1,0 +1,1618 @@
+// IOTx Workspace: Calendar, Tasks and Team Chat. Its own database
+// (iotx_workspace). People come from the suite (single sign-on); every row is
+// scoped by the suite's workspace id (`ws`).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------- People and sessions ----------
+
+/// A suite user (id is the suite's user id).
+model User {
+  id             String    @id
+  email          String
+  name           String?
+  image          String?
+  tz             String    @default("UTC")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  /// Last time they opened Calendar (drives the 60s Google poll).
+  calendarSeenAt DateTime?
+  /// Calendar AI: working hours { start "09:30", end "18:30", days [1..6], lunchStart, lunchEnd, buffer }; null = defaults.
+  workHours      Json?
+  /// Calendar settings: { weekStart, timeFormat, defaultMinutes, defaultReminders, secondTz, showWeekends, showDeclined, hours: { "1": [{ start, end }], … }, location: { "1": "office" | "home" | text } }.
+  calSettings    Json?
+  /// Chat: { status, emoji, until, away, dndUntil, email (bool), desktop (bool) }.
+  chatPrefs      Json?
+  /// Calendar: birthday for the Birthdays calendar, "YYYY-MM-DD" or "--MM-DD" (year kept private); null = not set.
+  birthday       String?
+  /// Calendar: who sees the birthday: private (only them) | workspace (everyone in their workspace).
+  birthdayShare  String    @default("private")
+
+  @@map("users")
+}
+
+/// People known in a suite workspace (anyone who has signed in to Workspace there).
+model Member {
+  ws       String
+  userId   String
+  seenAt   DateTime @default(now())
+
+  @@id([ws, userId])
+  @@index([userId])
+  @@map("members")
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  ws        String
+  /// The latest suite pass (used to ask the suite for live permission decisions).
+  pass      String
+  passExp   DateTime
+  /// Permission decisions for every Workspace key, refreshed every 60s while the pass is valid.
+  perms     Json
+  permsAt   DateTime
+  owner     Boolean  @default(false)
+  /// A Chat guest from outside the company (no suite account; perms fixed to Chat).
+  guest     Boolean  @default(false)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  ws        String
+  userId    String
+  kind      String
+  title     String
+  body      String    @default("")
+  link      String    @default("")
+  /// De-duplication key (reminders).
+  key       String?   @unique
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([ws, userId, createdAt])
+  @@map("notifications")
+}
+
+// ---------- Calendar ----------
+
+model Calendar {
+  id          String          @id @default(cuid())
+  ws          String
+  /// personal: someone's calendar (their main "My calendar" or another they made); team: visible to everyone; subscribed: read-only from an iCal URL.
+  kind        String          @default("personal")
+  ownerId     String?
+  name        String
+  description String          @default("")
+  color       String          @default("#4f46e5")
+  /// The owner's main calendar (Google sync and invitations land here).
+  primary     Boolean         @default(true)
+  /// For subscribed calendars: the iCal URL and when it was last read.
+  icsUrl      String?
+  icsFetchedAt DateTime?
+  icsError    String?
+  /// A secret link to this calendar as an iCal feed (read-only), or null when not shared that way.
+  feedToken   String?
+  /// What everyone in the workspace sees by default: none | busy (free/busy only) | read.
+  wsAccess    String          @default("busy")
+  createdBy   String
+  createdAt   DateTime        @default(now())
+  /// Public access (no sign-in): none | busy (free/busy only) | full (details; private events still show as "Busy").
+  publicMode  String          @default("none")
+  /// Unguessable key for the public page /workspace/embed/<token>; null when not public.
+  publicToken String?
+  events      Event[]
+  shares      CalendarShare[]
+
+  @@index([ws, kind])
+  @@index([ownerId])
+  @@index([feedToken])
+  @@index([publicToken])
+  @@map("calendars")
+}
+
+model Event {
+  id            String     @id @default(cuid())
+  ws            String
+  calendarId    String
+  calendar      Calendar   @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  creatorId     String
+  title         String
+  description   String     @default("")
+  location      String     @default("")
+  /// UTC instants. For all-day events: midnight UTC of the first day, end exclusive.
+  start         DateTime
+  end           DateTime
+  allDay        Boolean    @default(false)
+  /// The zone the event was written in (recurrence expands in this zone).
+  tz            String     @default("UTC")
+  /// RRULE body (e.g. FREQ=WEEKLY;BYDAY=MO,WE), null for single events.
+  rrule         String?
+  /// Occurrence starts (UTC ISO) removed from a series.
+  exdates       String[]   @default([])
+  /// For a changed occurrence: the series it belongs to and the occurrence it replaces.
+  recurringId   String?
+  originalStart DateTime?
+  color         String?
+  conferenceUrl String?
+  /// Minutes before start.
+  reminders     Int[]      @default([])
+  /// Email reminders, minutes before start.
+  emailReminders Int[]     @default([])
+  /// default | public | private (private: others see only "busy")
+  visibility    String     @default("default")
+  /// busy | free
+  transparency  String     @default("busy")
+  /// default | outOfOffice | focusTime | workingLocation
+  eventType     String     @default("default")
+  /// Out of office / focus time: decline new and existing invitations in this time, with a message.
+  autoDecline   Boolean    @default(false)
+  declineMessage String    @default("")
+  guestsCanModify Boolean  @default(false)
+  guestsCanInvite Boolean  @default(true)
+  guestsSeeList   Boolean  @default(true)
+  /// Made from a booking page.
+  bookingId     String?
+  googleId      String?
+  /// Google's `updated` stamp last seen or written (echo detection).
+  googleUpdated DateTime?
+  /// When this row was last in step with Google; updatedAt > syncedAt means a change waits to be pushed.
+  syncedAt      DateTime?
+  createdAt     DateTime   @default(now())
+  /// Set explicitly on every change (not @updatedAt) so imports can mark rows as in sync.
+  updatedAt     DateTime   @default(now())
+  /// Soft delete (so deletions can follow to Google).
+  deletedAt     DateTime?
+  /// From Google, organized by someone else: who organizes it, my reply there (needs | yes | no | maybe) and the address Google knows me by.
+  googleOrganizer String?
+  rsvpSelf        String?
+  googleSelfEmail String?
+  attendees     Attendee[]
+
+  @@unique([calendarId, googleId])
+  @@index([ws, calendarId, start])
+  @@index([recurringId])
+  @@map("events")
+}
+
+model Attendee {
+  id       String  @id @default(cuid())
+  eventId  String
+  event    Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId   String?
+  email    String
+  name     String  @default("")
+  /// needs | yes | no | maybe
+  response String  @default("needs")
+  /// A reply note, and a time the guest proposed instead.
+  comment  String  @default("")
+  proposedStart DateTime?
+  proposedEnd   DateTime?
+  optional Boolean @default(false)
+  /// Secret for an outside guest's Yes / No / Maybe links in their email.
+  token    String?
+
+  @@unique([eventId, email])
+  @@index([userId])
+  @@index([token])
+  @@map("attendees")
+}
+
+/// A calendar shared with one person: busy (free/busy only) | read | edit | manage.
+model CalendarShare {
+  calendarId String
+  calendar   Calendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  userId     String
+  role       String   @default("read")
+  createdAt  DateTime @default(now())
+
+  @@id([calendarId, userId])
+  @@index([userId])
+  @@map("calendar_shares")
+}
+
+/// Someone else's calendar added to my list ("Other calendars"), with my colour and visibility.
+model CalendarSub {
+  userId     String
+  calendarId String
+  color      String?
+  hidden     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@id([userId, calendarId])
+  @@map("calendar_subs")
+}
+
+/// A file attached to an event.
+model EventAttachment {
+  id        String   @id @default(cuid())
+  eventId   String
+  name      String
+  type      String
+  size      Int
+  path      String
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@index([eventId])
+  @@map("event_attachments")
+}
+
+/// A booking page: people book time with me from a public link.
+model BookingPage {
+  id          String   @id @default(cuid())
+  ws          String
+  ownerId     String
+  /// The public link: /workspace/book/<slug>
+  slug        String   @unique
+  title       String
+  description String   @default("")
+  /// Meeting length in minutes.
+  minutes     Int      @default(30)
+  /// Weekly availability: { "1": [{ start: "09:00", end: "17:00" }], … } (0 = Sunday), in tz.
+  hours       Json
+  tz          String   @default("UTC")
+  bufferMin   Int      @default(0)
+  /// Book at least this many hours ahead, at most this many days ahead.
+  noticeHours Int      @default(4)
+  maxDays     Int      @default(60)
+  maxPerDay   Int?
+  /// meet (our own video link) | phone | place | none
+  locationKind String  @default("meet")
+  location    String   @default("")
+  /// Extra questions: [{ id, label, required }]
+  questions   Json     @default("[]")
+  calendarId  String?
+  color       String   @default("#4f46e5")
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([ws, ownerId])
+  @@map("booking_pages")
+}
+
+/// One person's Google Calendar sync state.
+model GoogleSync {
+  userId     String    @id
+  ws         String
+  calendarId String
+  syncToken  String?
+  lastSyncAt DateTime?
+  error      String?
+  updatedAt  DateTime  @updatedAt
+  /// Google contacts' birthdays (People API): last read, and why it failed (e.g. no contacts permission).
+  birthdaysAt    DateTime?
+  birthdaysError String?
+
+  @@map("google_sync")
+}
+
+/// Another Google calendar (not the primary) synced two ways into one of the person's workspace calendars.
+model GoogleCalLink {
+  id          String    @id @default(cuid())
+  userId      String
+  ws          String
+  /// Google's calendar id (e.g. "abc@group.calendar.google.com").
+  googleCalId String
+  /// The workspace calendar it lands in (one of their personal calendars).
+  calendarId  String
+  name        String    @default("")
+  /// Google's access role was reader/freeBusyReader: pull only, nothing is written back.
+  readOnly    Boolean   @default(false)
+  syncToken   String?
+  lastSyncAt  DateTime?
+  error       String?
+  createdAt   DateTime  @default(now())
+
+  @@unique([userId, googleCalId])
+  @@index([calendarId])
+  @@map("google_cal_links")
+}
+
+/// A Google contact's birthday (People API), shown on the person's Birthdays calendar.
+model GoogleBirthday {
+  userId       String
+  resourceName String
+  name         String
+  month        Int
+  day          Int
+  year         Int?
+  updatedAt    DateTime @default(now())
+
+  @@id([userId, resourceName])
+  @@map("google_birthdays")
+}
+
+// ---------- Tasks ----------
+
+model Project {
+  id          String          @id @default(cuid())
+  ws          String
+  name        String
+  /// Short issue-key prefix, e.g. "ENG" for ENG-12. Unique per workspace (checked in lib/tasks).
+  key         String?
+  description String          @default("")
+  leadId      String?
+  color       String          @default("#16a34a")
+  /// The workflow: [{ id, name, category: "todo" | "doing" | "done", color, wip }]. Empty means the default four.
+  statuses    Json            @default("[]")
+  /// Shared labels: [{ name, color }].
+  labelDefs   Json            @default("[]")
+  /// Custom fields: [{ id, name, type: text | number | select | date | user | checkbox, options? }].
+  fieldDefs   Json            @default("[]")
+  /// Issue templates: [{ id, name, type, title, description, labels, priority }].
+  templates   Json            @default("[]")
+  /// Board quick filters for everyone: [{ id, name, query }] in the query language.
+  quickFilters Json           @default("[]")
+  /// Features: { sprints, releases, components, estimation: "points" | "time" }.
+  features    Json            @default("{}")
+  nextNumber  Int             @default(1)
+  createdBy   String
+  createdAt   DateTime        @default(now())
+  archived    Boolean         @default(false)
+  members     ProjectMember[]
+  tasks       Task[]
+  sprints     Sprint[]
+  versions    Version[]
+  components  Component[]
+
+  @@index([ws, key])
+  @@map("projects")
+}
+
+model ProjectMember {
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  /// admin | member | viewer
+  role      String  @default("member")
+
+  @@id([projectId, userId])
+  @@index([userId])
+  @@map("project_members")
+}
+
+model Task {
+  id           String           @id @default(cuid())
+  ws           String
+  projectId    String
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// The issue number within the project (key = project key + "-" + number).
+  number       Int              @default(0)
+  /// task | bug | story | epic | subtask
+  type         String           @default("task")
+  parentId     String?
+  /// The epic this issue belongs to (an issue of type "epic").
+  epicId       String?
+  sprintId     String?
+  title        String
+  description  String           @default("")
+  /// A status id from the project's workflow.
+  status       String           @default("todo")
+  /// 0 low, 1 normal, 2 high, 3 urgent
+  priority     Int              @default(1)
+  assigneeId   String?
+  watchers     String[]         @default([])
+  /// Calendar dates (midnight UTC).
+  start        DateTime?
+  due          DateTime?
+  /// Story points.
+  points       Float?
+  /// Original estimate in minutes; time logged is summed from worklogs.
+  estimateMin  Int?
+  labels       String[]         @default([])
+  /// Values of the project's custom fields, by field id.
+  custom       Json             @default("{}")
+  checklist    Json             @default("[]")
+  links        Json             @default("[]")
+  position     Float            @default(0)
+  createdBy    String
+  /// "Make this a task" from a chat message.
+  messageId    String?
+  /// Flagged as an impediment (yellow card), with an optional reason.
+  flagged      Boolean          @default(false)
+  flagNote     String?
+  /// Fix version (release) and components.
+  versionId    String?
+  componentIds String[]         @default([])
+  /// When the status last changed, for "days in column" and stuck work.
+  statusAt     DateTime         @default(now())
+  completedAt  DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  comments     TaskComment[]
+  activity     TaskActivity[]
+  attachments  TaskAttachment[]
+  worklogs     TaskWorklog[]
+  linksFrom    TaskLink[]       @relation("linkFrom")
+  linksTo      TaskLink[]       @relation("linkTo")
+
+  @@index([ws, projectId, status])
+  @@index([ws, assigneeId])
+  @@index([parentId])
+  @@index([epicId])
+  @@index([sprintId])
+  @@index([projectId, number])
+  @@map("tasks")
+}
+
+model TaskComment {
+  id        String    @id @default(cuid())
+  taskId    String
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  body      String
+  editedAt  DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([taskId])
+  @@map("task_comments")
+}
+
+/// Who changed what on an issue, for the history tab.
+model TaskActivity {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  /// created | field | comment | attachment | link | worklog
+  kind      String
+  field     String?
+  from      String?
+  to        String?
+  createdAt DateTime @default(now())
+
+  @@index([taskId, createdAt])
+  @@map("task_activity")
+}
+
+/// blocks / relates / duplicates / clones between two issues.
+model TaskLink {
+  id        String   @id @default(cuid())
+  fromId    String
+  from      Task     @relation("linkFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  toId      String
+  to        Task     @relation("linkTo", fields: [toId], references: [id], onDelete: Cascade)
+  kind      String
+  createdBy String
+  createdAt DateTime @default(now())
+
+  @@unique([fromId, toId, kind])
+  @@index([toId])
+  @@map("task_links")
+}
+
+model TaskAttachment {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  name      String
+  type      String
+  size      Int
+  /// Path under storage/task-files.
+  path      String
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@index([taskId])
+  @@map("task_attachments")
+}
+
+model TaskWorklog {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  minutes   Int
+  note      String   @default("")
+  /// The day the work was done.
+  day       DateTime
+  createdAt DateTime @default(now())
+
+  @@index([taskId])
+  @@index([userId, day])
+  @@map("task_worklogs")
+}
+
+model Sprint {
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  goal        String    @default("")
+  /// planned | active | closed
+  state       String    @default("planned")
+  startAt     DateTime?
+  endAt       DateTime?
+  completedAt DateTime?
+  /// Snapshot when the sprint started and ended, for reports: { points, issues, done… }.
+  stats       Json      @default("{}")
+  createdAt   DateTime  @default(now())
+
+  @@index([projectId, state])
+  @@map("sprints")
+}
+
+/// A release: a set of issues shipped together.
+model Version {
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  description String    @default("")
+  startDate   DateTime?
+  releaseDate DateTime?
+  /// unreleased | released | archived
+  status      String    @default("unreleased")
+  releasedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([projectId, status])
+  @@map("versions")
+}
+
+/// A part of the product; its lead is the default assignee for new issues in it.
+model Component {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  description String   @default("")
+  leadId      String?
+  createdAt   DateTime @default(now())
+
+  @@index([projectId])
+  @@map("components")
+}
+
+/// A saved search: { projectId?, text?, assignee?, type?, status?, priority?, label?, sprint?, epic?, due? }.
+model TaskFilter {
+  id        String   @id @default(cuid())
+  ws        String
+  userId    String
+  name      String
+  query     Json
+  shared    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([ws, userId])
+  @@map("task_filters")
+}
+
+/// "When X happens, do Y" for a project, e.g. when an issue moves to Done, assign it to its reporter.
+model TaskRule {
+  id        String   @id @default(cuid())
+  projectId String
+  name      String
+  /// { on: "created" | "status" | "assigned" | "due_soon", status? }
+  trigger   Json
+  /// [{ do: "assign" | "status" | "label" | "comment" | "notify", value }]
+  actions   Json
+  enabled   Boolean  @default(true)
+  createdBy String
+  runs      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+  @@map("task_rules")
+}
+
+/// Repeating issues: a template that makes a new issue on a schedule.
+model TaskRecurrence {
+  id        String   @id @default(cuid())
+  projectId String
+  /// The fields of the issue to make (title, type, assignee, priority, labels, description, dueInDays).
+  template  Json
+  /// daily | weekly | monthly, with an interval and weekdays
+  rule      Json
+  nextAt    DateTime
+  enabled   Boolean  @default(true)
+  createdBy String
+  createdAt DateTime @default(now())
+
+  @@index([nextAt])
+  @@map("task_recurrences")
+}
+
+// ---------- Team chat ----------
+
+model Channel {
+  id        String          @id @default(cuid())
+  ws        String
+  /// public | private | dm
+  kind      String          @default("public")
+  name      String
+  topic     String          @default("")
+  /// For direct messages: sorted user ids joined by ":" (one DM per pair).
+  dmKey     String?
+  createdBy String
+  createdAt DateTime        @default(now())
+  lastAt    DateTime        @default(now())
+  /// Longer "about" text shown in channel details.
+  description String        @default("")
+  /// Archived channels are read-only and hidden from the sidebar.
+  archivedAt DateTime?
+  /// Delete messages older than this many days (null = keep forever).
+  retentionDays Int?
+  members   ChannelMember[]
+  messages  Message[]
+
+  @@unique([ws, dmKey])
+  @@index([ws, kind])
+  @@map("channels")
+}
+
+model ChannelMember {
+  channelId  String
+  channel    Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  userId     String
+  lastReadAt DateTime @default(now())
+  joinedAt   DateTime @default(now())
+  /// Muted channels don't count toward badges.
+  muted      Boolean  @default(false)
+  /// all | mentions | none: which messages notify.
+  notifyLevel String  @default("all")
+  starred    Boolean  @default(false)
+  /// Last unread-mention email, so it's sent once per batch.
+  emailedAt  DateTime?
+
+  @@id([channelId, userId])
+  @@index([userId])
+  @@map("channel_members")
+}
+
+model Message {
+  id         String     @id @default(cuid())
+  ws         String
+  channelId  String
+  channel    Channel    @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  userId     String
+  /// Thread root, for replies.
+  parentId   String?
+  body       String
+  mentions   String[]   @default([])
+  pinned     Boolean    @default(false)
+  replyCount Int        @default(0)
+  lastReplyAt DateTime?
+  taskId     String?
+  editedAt   DateTime?
+  deletedAt  DateTime?
+  createdAt  DateTime   @default(now())
+  /// A thread reply that was also sent to the channel.
+  alsoChannel Boolean   @default(false)
+  /// @channel / @here / @everyone, if used.
+  broadcast  String?
+  /// A message shared (forwarded) into this one.
+  sharedId   String?
+  /// { url, title, description, image, site } for the first link.
+  preview    Json?
+  /// Incoming webhook that posted it (shown with the hook's name).
+  hookId     String?
+  /// "joined the channel", "renamed …": shown small, never unread.
+  system     Boolean    @default(false)
+  reactions  Reaction[]
+  files      ChatFile[]
+
+  @@index([channelId, parentId, createdAt])
+  @@index([ws])
+  @@map("messages")
+}
+
+model Reaction {
+  messageId String
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  emoji     String
+
+  @@id([messageId, userId, emoji])
+  @@map("reactions")
+}
+
+/// A file posted in chat (images get previews, audio is a voice message).
+model ChatFile {
+  id        String   @id @default(cuid())
+  ws        String
+  channelId String
+  messageId String?
+  message   Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  name      String
+  type      String
+  size      Int
+  path      String
+  createdAt DateTime @default(now())
+
+  @@index([channelId])
+  @@index([messageId])
+  @@index([ws, createdAt])
+  @@map("chat_files")
+}
+
+/// "Save for later", with an optional reminder.
+model SavedMessage {
+  userId    String
+  messageId String
+  remindAt  DateTime?
+  reminded  Boolean  @default(false)
+  done      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@id([userId, messageId])
+  @@index([remindAt])
+  @@map("saved_messages")
+}
+
+/// A message to post later.
+model ScheduledMessage {
+  id        String   @id @default(cuid())
+  ws        String
+  channelId String
+  userId    String
+  parentId  String?
+  body      String
+  fileIds   String[] @default([])
+  sendAt    DateTime
+  createdAt DateTime @default(now())
+
+  @@index([sendAt])
+  @@index([userId])
+  @@map("scheduled_messages")
+}
+
+/// @handle that mentions a group of people.
+model UserGroup {
+  id        String   @id @default(cuid())
+  ws        String
+  handle    String
+  name      String
+  memberIds String[] @default([])
+  createdBy String
+  createdAt DateTime @default(now())
+
+  @@unique([ws, handle])
+  @@map("user_groups")
+}
+
+/// Incoming webhook: POST text to /api/chat/hooks/<token> and it appears in the channel.
+model ChatHook {
+  id        String   @id @default(cuid())
+  ws        String
+  channelId String
+  name      String
+  token     String
+  createdBy String
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([channelId])
+  @@map("chat_hooks")
+}
+
+// ---------- Chat: guests, push, bots and workflows ----------
+
+/// Someone from outside the company, invited by an admin into chosen channels only.
+model ChatGuest {
+  id            String    @id @default(cuid())
+  ws            String
+  email         String
+  name          String    @default("")
+  /// The guest's user id ("guest_…"), set when they first sign in.
+  userId        String?
+  channelIds    String[]  @default([])
+  invitedBy     String
+  /// sha256 of the current sign-in link, and when it stops working.
+  tokenHash     String?
+  tokenExp      DateTime?
+  acceptedAt    DateTime?
+  /// The guest account stops working after this (null = no end date).
+  expiresAt     DateTime?
+  deactivatedAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@unique([ws, email])
+  @@index([tokenHash])
+  @@index([userId])
+  @@map("chat_guests")
+}
+
+/// A browser or phone that gets push notifications while no Workspace tab is open.
+model PushSub {
+  id        String    @id @default(cuid())
+  userId    String
+  ws        String
+  endpoint  String    @unique
+  p256dh    String
+  auth      String
+  agent     String    @default("")
+  createdAt DateTime  @default(now())
+  lastOkAt  DateTime?
+  failures  Int       @default(0)
+
+  @@index([userId])
+  @@map("push_subs")
+}
+
+/// Web Push (VAPID) keys, made once on first use.
+model PushConfig {
+  id         String @id
+  publicKey  String
+  privateKey String
+
+  @@map("push_config")
+}
+
+/// A bot: a workspace member ("bot_…") that posts with its API token and gets events and slash commands at its URL.
+model ChatBot {
+  id          String    @id @default(cuid())
+  ws          String
+  userId      String    @unique
+  name        String
+  description String    @default("")
+  tokenHash   String
+  /// Signs event and command requests (HMAC-SHA256).
+  secret      String
+  eventsUrl   String    @default("")
+  /// [{ command, description, usage }]
+  commands    Json      @default("[]")
+  createdBy   String
+  createdAt   DateTime  @default(now())
+  disabledAt  DateTime?
+
+  @@index([ws])
+  @@index([tokenHash])
+  @@map("chat_bots")
+}
+
+/// No-code automation: one trigger, then steps. Posts as "wf_<id>" under the workflow's name.
+model ChatWorkflow {
+  id        String    @id @default(cuid())
+  ws        String
+  name      String
+  enabled   Boolean   @default(true)
+  /// { type: joined | keyword | reaction | schedule | shortcut, channelId, keyword, emoji, time, days, tz, fields }
+  trigger   Json
+  /// [{ type: message | dm | task | react, channelId, to, text, projectId, title }]
+  steps     Json
+  createdBy String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  lastRunAt DateTime?
+  runs      Int       @default(0)
+  /// Day (YYYY-MM-DD in the trigger's zone) of the last scheduled run, so it fires once.
+  lastDay   String?
+  lastError String?
+
+  @@index([ws])
+  @@map("chat_workflows")
+}
+
+// ---------- Meet (video meetings on LiveKit) ----------
+
+/// In-meeting chat, kept after the call. toIdentity set = a private message.
+model MeetChat {
+  id           String   @id @default(cuid())
+  meetingId    String
+  meeting      Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  fromIdentity String
+  fromName     String
+  toIdentity   String?
+  toName       String?
+  text         String
+  /// [{ id, name, type, size }]
+  files        Json?
+  createdAt    DateTime @default(now())
+
+  @@index([meetingId, createdAt])
+  @@map("meet_chat")
+}
+
+/// A file shared in the meeting chat.
+model MeetFile {
+  id        String   @id @default(cuid())
+  meetingId String
+  identity  String
+  name      String
+  type      String
+  size      Int
+  path      String
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([meetingId])
+  @@map("meet_files")
+}
+
+/// A line of live captions (the transcript with speakers and times).
+model MeetCaption {
+  id        String   @id @default(cuid())
+  meetingId String
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  identity  String
+  name      String
+  text      String
+  at        DateTime @default(now())
+
+  @@index([meetingId, at])
+  @@map("meet_captions")
+}
+
+/// A poll. status: draft | open | closed. Results shared with everyone once closed (or when shared).
+model MeetPoll {
+  id        String     @id @default(cuid())
+  meetingId String
+  meeting   Meeting    @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  question  String
+  options   String[]
+  multi     Boolean    @default(false)
+  anonymous Boolean    @default(true)
+  status    String     @default("draft")
+  shared    Boolean    @default(false)
+  createdBy String
+  createdAt DateTime   @default(now())
+  votes     MeetVote[]
+
+  @@index([meetingId])
+  @@map("meet_polls")
+}
+
+model MeetVote {
+  pollId   String
+  poll     MeetPoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  identity String
+  name     String
+  choices  Int[]
+  at       DateTime @default(now())
+
+  @@id([pollId, identity])
+  @@map("meet_votes")
+}
+
+/// Q&A. status: open | answered | dismissed.
+model MeetQuestion {
+  id         String   @id @default(cuid())
+  meetingId  String
+  meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  identity   String
+  name       String
+  anonymous  Boolean  @default(false)
+  text       String
+  upvotes    String[] @default([])
+  answer     String   @default("")
+  answeredBy String?
+  status     String   @default("open")
+  createdAt  DateTime @default(now())
+
+  @@index([meetingId])
+  @@map("meet_questions")
+}
+
+/// A video meeting room. Joined at /workspace/meet/<code>.
+model Meeting {
+  id           String            @id @default(cuid())
+  ws           String
+  /// "abc-defg-hij"
+  code         String            @unique
+  title        String
+  hostId       String
+  /// The calendar event this meeting belongs to.
+  eventId      String?
+  /// Started from Team Chat: the channel and the "join" message (notes are posted in its thread).
+  channelId    String?
+  messageId    String?
+  /// People told when the meeting starts (suite user ids).
+  invitees     String[]          @default([])
+  waitingRoom  Boolean           @default(true)
+  allowGuests  Boolean           @default(true)
+  muteOnEntry  Boolean           @default(false)
+  locked       Boolean           @default(false)
+  startedAt    DateTime?
+  endedAt      DateTime?
+  /// AI notes: "" | recording | processing | ready | failed
+  notesStatus  String            @default("")
+  notesError   String            @default("")
+  transcript   String            @default("")
+  /// { summary, decisions[], actionItems[{ title, owner, due }] }
+  notes        Json?
+  notesAt      DateTime?
+  notesTaskIds String[]          @default([])
+  notesPostedAt DateTime?
+  /// Guests must enter this to join (members of the workspace don't).
+  passcode     String?
+  /// Members wait in the lobby too (not only guests).
+  everyoneWaits Boolean          @default(false)
+  /// A person's fixed meeting room (one per person per workspace).
+  personal     Boolean           @default(false)
+  /// LiveKit identities with host controls besides the host.
+  coHosts      String[]          @default([])
+  /// Shown large for everyone (a LiveKit identity), set by a host.
+  spotlight    String?
+  /// Live captions on for the room, and their language.
+  captions     Boolean           @default(false)
+  captionLang  String            @default("en-US")
+  /// Breakout rooms: { open, rooms: [{ n, name, members: identity[] }], allowChoose, message }
+  breakout     Json?
+  /// Notes emailed to attendees.
+  notesSentAt  DateTime?
+  /// meeting | webinar (host and panelists on stage, attendees watch) | upload (a recording file) | inperson (recorded in a browser) | external (Zoom / Google Meet / Teams via the extension).
+  kind         String            @default("meeting")
+  /// Read-style report, version 2 (see docs/readai-contract.md). notes stays filled for old screens.
+  report       Json?
+  /// Report template: general | sales | interview | team | coaching | one-on-one | <MeetTemplate id>
+  template     String            @default("general")
+  /// Language the report is written in ("" = the meeting's own language).
+  reportLang   String            @default("")
+  /// Length of the recording or call, in seconds.
+  durationSec  Int?
+  /// End-to-end encrypted media. The key is never on the server: only a check value (sha256 of a random secret).
+  e2ee         Boolean           @default(false)
+  e2eeCheck    String?
+  /// Webinars: when it starts (registration page and emails).
+  startsAt     DateTime?
+  /// Webinars: people register first; with approval a host lets each one in.
+  registration Boolean           @default(false)
+  regApproval  Boolean           @default(false)
+  /// Webinars: workspace members on stage (suite user ids).
+  panelists    String[]          @default([])
+  /// Webinars: LiveKit identities brought on stage from the audience.
+  stage        String[]          @default([])
+  /// Phone dial-in: numeric meeting ID and PIN; the LiveKit SIP dispatch rule (when SIP is set up).
+  dialInId     String?
+  dialInPin    String?
+  dialInRuleId String?
+  createdAt    DateTime          @default(now())
+  participants MeetParticipant[]
+  recordings   MeetRecording[]
+  chat         MeetChat[]
+  captionLines MeetCaption[]
+  polls        MeetPoll[]
+  questions    MeetQuestion[]
+  registrants  MeetRegistrant[]
+  streams      MeetStream[]
+  boardItems   MeetBoardItem[]
+  segments     MeetSegment[]
+  speakers     MeetSpeaker[]
+
+  @@index([ws, hostId])
+  @@index([eventId])
+  @@index([dialInId])
+  @@map("meetings")
+}
+
+/// Someone in (or waiting for) a meeting: a workspace member or a guest with a link.
+model MeetParticipant {
+  id        String    @id @default(cuid())
+  meetingId String
+  meeting   Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  /// member | guest
+  kind      String
+  userId    String?
+  name      String
+  /// LiveKit identity (u_<userId> or g_<id>).
+  identity  String
+  /// host | member | guest
+  role      String
+  /// waiting | admitted | denied | removed
+  status    String
+  /// Guests: sha256 of the secret their browser holds.
+  keyHash   String?
+  decidedBy String?
+  decidedAt DateTime?
+  joinedAt  DateTime?
+  /// Guests: hash of the address they joined from (removed guests can't come back under a new name).
+  ipHash    String?
+  /// Webinar attendees: hand raised (attendees are hidden in the room, so it is kept here).
+  handAt    DateTime?
+  /// Webinar attendees who registered.
+  registrantId String?
+  createdAt DateTime  @default(now())
+
+  @@unique([meetingId, identity])
+  @@index([meetingId, status])
+  @@map("meet_participants")
+}
+
+/// A recording made with LiveKit Egress: kind video (mp4, room composite) or audio (ogg, for AI notes).
+model MeetRecording {
+  id        String    @id @default(cuid())
+  meetingId String
+  meeting   Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  kind      String
+  egressId  String    @unique
+  /// File name under the recordings folder.
+  file      String
+  /// starting | active | ending | complete | failed
+  status    String    @default("starting")
+  error     String    @default("")
+  size      Int       @default(0)
+  startedBy String
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  /// Deleted by the host or by retention (the file is gone).
+  deletedAt DateTime?
+
+  @@index([meetingId])
+  @@map("meet_recordings")
+}
+
+/// Someone who registered for a webinar. status: pending | approved | denied. Their join link carries a secret (stored as a hash).
+model MeetRegistrant {
+  id        String    @id @default(cuid())
+  meetingId String
+  meeting   Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  email     String
+  name      String
+  company   String    @default("")
+  status    String    @default("approved")
+  tokenHash String    @unique
+  identity  String?
+  ipHash    String?
+  emailedAt DateTime?
+  joinedAt  DateTime?
+  createdAt DateTime  @default(now())
+
+  @@unique([meetingId, email])
+  @@index([meetingId, status])
+  @@map("meet_registrants")
+}
+
+/// A live stream to an RTMP address (LiveKit Egress). target is the address without the stream key.
+model MeetStream {
+  id        String    @id @default(cuid())
+  meetingId String
+  meeting   Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  egressId  String    @unique
+  target    String
+  /// starting | active | ending | complete | failed
+  status    String    @default("starting")
+  error     String    @default("")
+  startedBy String
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+
+  @@index([meetingId])
+  @@map("meet_streams")
+}
+
+/// One thing drawn on a meeting's whiteboard (kept after the meeting).
+/// kind: pen | rect | ellipse | line | arrow | text. data: { color, size, points[] | x1,y1,x2,y2 | x,y,text, erase? } in 0..1 coordinates.
+model MeetBoardItem {
+  id        String   @id @default(cuid())
+  meetingId String
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  key       String
+  identity  String
+  kind      String
+  data      Json
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([meetingId, key])
+  @@index([meetingId, createdAt])
+  @@map("meet_board_items")
+}
+
+// ---------- Meet reports (Read AI parity, helper A) ----------
+
+/// One timestamped line of a meeting's transcript (seconds from the start of the recording).
+model MeetSegment {
+  id        String   @id @default(cuid())
+  meetingId String
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  seq       Int
+  start     Float
+  end       Float
+  /// Display name.
+  speaker   String
+  /// LiveKit identity or suite user id, when known.
+  identity  String?
+  text      String
+
+  @@index([meetingId, seq])
+  @@map("meet_segments")
+}
+
+/// Per-speaker numbers for a meeting, written with the report.
+model MeetSpeaker {
+  id                  String  @id @default(cuid())
+  meetingId           String
+  meeting             Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  userId              String?
+  name                String
+  talkSec             Float
+  words               Int
+  wpm                 Float
+  fillers             Int
+  questions           Int
+  nonInclusive        Int
+  longestMonologueSec Float
+  joinedLateSec       Int?
+
+  @@index([meetingId])
+  @@map("meet_speakers")
+}
+
+/// A workspace's own report template. sections: [{ title, prompt }]
+model MeetTemplate {
+  id           String   @id @default(cuid())
+  ws           String
+  name         String
+  instructions String
+  sections     Json
+  createdBy    String
+  createdAt    DateTime @default(now())
+
+  @@index([ws])
+  @@map("meet_templates")
+}
+
+/// Custom vocabulary: names and terms the transcriber and the report should spell right.
+model MeetVocab {
+  id   String @id @default(cuid())
+  ws   String
+  term String
+  note String @default("")
+
+  @@index([ws])
+  @@map("meet_vocab")
+}
+
+// ---------- Across meetings (Read AI parity, helper B) ----------
+
+/// A folder of meeting reports. kind: personal | shared (members see and add) | smart (rules fill it).
+model MeetFolder {
+  id        String           @id @default(cuid())
+  ws        String
+  ownerId   String
+  name      String
+  kind      String           @default("personal")
+  /// Shared (and shared smart) folders: suite user ids who see the folder and its reports.
+  members   String[]         @default([])
+  /// Smart folders: { titleContains, attendee, template, topic, source } (every rule given must match).
+  rules     Json?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  items     MeetFolderItem[]
+
+  @@index([ws, ownerId])
+  @@map("meet_folders")
+}
+
+/// A report in a folder. auto: put there by a smart folder's rules (taken out again when they stop matching).
+model MeetFolderItem {
+  folderId  String
+  folder    MeetFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  meetingId String
+  addedBy   String
+  auto      Boolean    @default(false)
+  addedAt   DateTime   @default(now())
+
+  @@id([folderId, meetingId])
+  @@index([meetingId])
+  @@map("meet_folder_items")
+}
+
+/// A report shared with one more person (widens canSeeReport).
+model MeetReportShare {
+  meetingId String
+  userId    String
+  sharedBy  String
+  createdAt DateTime @default(now())
+
+  @@id([meetingId, userId])
+  @@index([userId])
+  @@map("meet_report_shares")
+}
+
+/// A suggestion for one person. kind: decline | shorter | less_often | suggest | move (Flexible meetings).
+/// status: new | accepted | ignored | failed. details: { eventId, occ?, from?, to?, rrule?, minutes?, auto? }.
+model MeetRecommendation {
+  id         String    @id @default(cuid())
+  ws         String
+  userId     String
+  eventId    String
+  kind       String
+  title      String
+  reason     String
+  details    Json      @default("{}")
+  status     String    @default("new")
+  result     String    @default("")
+  /// Same suggestion, same key: never offered twice (moves carry the target time).
+  key        String
+  createdAt  DateTime  @default(now())
+  reviewedAt DateTime?
+
+  @@unique([userId, key])
+  @@index([ws, userId, status])
+  @@map("meet_recommendations")
+}
+
+/// The Daily Read: one digest per person per local day (also shown in the app).
+model ReadDigest {
+  id        String    @id @default(cuid())
+  ws        String
+  userId    String
+  /// Local date it is for (YYYY-MM-DD in the person's zone).
+  day       String
+  subject   String
+  text      String
+  html      String
+  /// { yesterday: [...], actions: [...], today: [...] }
+  data      Json
+  emailedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@unique([userId, day])
+  @@map("read_digests")
+}
+
+/// One person's Read settings: the Daily Read (opt-in) and the hour it comes at.
+model ReadPrefs {
+  ws        String
+  userId    String
+  dailyRead Boolean  @default(false)
+  dailyHour Int      @default(7)
+  updatedAt DateTime @updatedAt
+
+  @@id([ws, userId])
+  @@map("read_prefs")
+}
+
+/// Per workspace: who gets meeting recaps automatically. recapTo: attendees | invitees | me (only the host).
+model MeetReadSettings {
+  ws        String   @id
+  recapTo   String   @default("attendees")
+  updatedBy String   @default("")
+  updatedAt DateTime @updatedAt
+
+  @@map("meet_read_settings")
+}
+
+/// Someone who asked not to be summarised: their lines are dropped from the transcript and report of meetings they attend.
+/// Outside people confirm by an emailed link (confirmedAt); members opt out while signed in.
+model ReadOptOut {
+  id          String    @id @default(cuid())
+  ws          String
+  email       String
+  name        String    @default("")
+  userId      String?
+  tokenHash   String?
+  confirmedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@unique([ws, email])
+  @@index([tokenHash])
+  @@map("read_opt_outs")
+}
+
+/// Ask (across meetings): a conversation. folderId: asked inside a folder.
+model MeetAskThread {
+  id        String           @id @default(cuid())
+  ws        String
+  userId    String
+  title     String
+  folderId  String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  messages  MeetAskMessage[]
+
+  @@index([ws, userId, updatedAt])
+  @@map("meet_ask_threads")
+}
+
+model MeetAskMessage {
+  id        String        @id @default(cuid())
+  threadId  String
+  thread    MeetAskThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  /// user | assistant
+  role      String
+  text      String
+  /// [{ ref: "M1", kind: meeting|task|chat|kb, title, href, at? }]
+  sources   Json          @default("[]")
+  createdAt DateTime      @default(now())
+
+  @@index([threadId, createdAt])
+  @@map("meet_ask_messages")
+}
+
+/// An action item from a report turned into a task (For You), so it isn't offered twice.
+model ReadActionTask {
+  meetingId String
+  idx       Int
+  taskId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@id([meetingId, idx])
+  @@map("read_action_tasks")
+}
+
+/// Who was in a meeting on which day (recurring series reuse one meeting, so skips are counted per day).
+model ReadAttendance {
+  meetingId String
+  userId    String
+  /// YYYY-MM-DD (UTC).
+  day       String
+  at        DateTime @default(now())
+
+  @@id([meetingId, userId, day])
+  @@index([userId])
+  @@map("read_attendance")
+}
+
+/// Flexible meetings (Smart Scheduler): the organiser lets the platform move this event to a better time.
+model MeetFlexible {
+  eventId   String    @id
+  ws        String
+  userId    String
+  on        Boolean   @default(true)
+  checkedAt DateTime?
+  movedAt   DateTime?
+  updatedAt DateTime  @updatedAt
+
+  @@index([ws, on])
+  @@map("meet_flexible")
+}
+
+/// A report translated into another language ("Translate report"), kept per language until the report is re-made.
+model MeetReportLang {
+  id        String   @id @default(cuid())
+  meetingId String
+  lang      String
+  report    Json
+  createdAt DateTime @default(now())
+
+  @@unique([meetingId, lang])
+  @@map("meet_report_langs")
+}
+
+/// An in-person recording being uploaded in 10-second chunks (finalised into an "inperson" meeting).
+model MeetUpload {
+  id        String    @id @default(cuid())
+  ws        String
+  userId    String
+  meetingId String    @unique
+  mime      String    @default("audio/webm")
+  file      String
+  chunks    Int       @default(0)
+  bytes     Float     @default(0)
+  /// recording | done | failed
+  status    String    @default("recording")
+  createdAt DateTime  @default(now())
+  endedAt   DateTime?
+
+  @@index([ws, userId])
+  @@map("meet_uploads")
+}
+
+// ---------- Meet outside meetings and integrations (Read AI parity, helper C) ----------
+
+/// A personal sign-in for the browser extension or an MCP client ("Authorization: Bearer iotxr_…"). Only the hash is kept.
+model ExtensionToken {
+  id         String    @id @default(cuid())
+  ws         String
+  userId     String
+  name       String
+  /// extension | api
+  kind       String    @default("extension")
+  tokenHash  String    @unique
+  /// The first characters of the token, to tell tokens apart in the list.
+  hint       String
+  /// One-time pairing code (sha256) the extension trades for a fresh token; valid 10 minutes.
+  pairHash   String?   @unique
+  pairUntil  DateTime?
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([ws, userId])
+  @@map("extension_tokens")
+}
+
+/// A call captured by the browser extension (Google Meet, Zoom, Teams on the web): audio arrives in 10-second chunks.
+model MeetCapture {
+  id           String    @id @default(cuid())
+  meetingId    String    @unique
+  ws           String
+  userId       String
+  tokenId      String?
+  /// meet | zoom | teams | other
+  platform     String
+  url          String    @default("")
+  /// Names scraped from the call page, when the platform shows them.
+  participants String[]  @default([])
+  mime         String    @default("audio/webm")
+  chunks       Int       @default(0)
+  bytes        Int       @default(0)
+  /// recording | finishing | done | failed
+  status       String    @default("recording")
+  error        String    @default("")
+  startedAt    DateTime  @default(now())
+  endedAt      DateTime?
+
+  @@index([ws, userId])
+  @@map("meet_captures")
+}
+
+/// Report-ready webhooks out, signed like Chat's bots (x-iotx-signature).
+model MeetWebhook {
+  id         String         @id @default(cuid())
+  ws         String
+  userId     String
+  url        String
+  secret     String
+  events     String[]       @default(["report.ready"])
+  active     Boolean        @default(true)
+  createdAt  DateTime       @default(now())
+  deliveries MeetDelivery[]
+
+  @@index([ws, userId])
+  @@map("meet_webhooks")
+}
+
+/// A person's "report ready -> elsewhere" choices (Meet → Integrations).
+model MeetIntegration {
+  id                String   @id @default(cuid())
+  ws                String
+  userId            String
+  /// Post the report summary in this Chat channel.
+  chatChannelId     String?
+  /// Action items become tasks in this project.
+  tasksProjectId    String?
+  /// Decisions go to the knowledge base's review queue.
+  kbSuggest         Boolean  @default(false)
+  /// Add the summary and a link to the calendar event's description.
+  calendarWriteback Boolean  @default(false)
+  /// Email recap: off | attendees | invitees | me (used when Meet's sharing setting doesn't say).
+  emailRecap        String   @default("off")
+  /// Reports ready before this (when something was last turned on from all off) aren't sent anywhere.
+  activeSince       DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([ws, userId])
+  @@map("meet_integrations")
+}
+
+/// The delivery log: what was sent where when a report was ready (and webhook test deliveries).
+model MeetDelivery {
+  id        String       @id @default(cuid())
+  ws        String
+  userId    String
+  meetingId String?
+  webhookId String?
+  webhook   MeetWebhook? @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  /// webhook | chat | tasks | kb | calendar | email
+  target    String
+  event     String       @default("report.ready")
+  ok        Boolean
+  status    Int          @default(0)
+  detail    String       @default("")
+  ms        Int          @default(0)
+  test      Boolean      @default(false)
+  createdAt DateTime     @default(now())
+
+  @@index([ws, userId, createdAt])
+  @@index([meetingId])
+  @@map("meet_deliveries")
+}
+
+/// "Report ready" fan-out runs once per report version (the meeting's notesAt).
+model MeetDispatch {
+  id        String   @id @default(cuid())
+  meetingId String
+  version   String
+  createdAt DateTime @default(now())
+
+  @@unique([meetingId, version])
+  @@map("meet_dispatches")
+}

@@ -1,0 +1,59 @@
+/*
+ * Slides editor. The chrome uses the Sheets editor's classes (sheets.css,
+ * following the suite theme and the coral Slides accent); slides keep their
+ * own colours in every theme, on a dotted stage.
+ */
+.sl-main { flex: 1; min-height: 0; display: flex; }
+.sl-strip { width: 196px; flex: none; overflow-y: auto; padding: 10px 10px 40px 4px; background: var(--ix-bg); border-right: 1px solid var(--ix-line); }
+.sl-thumb { display: flex; gap: 6px; align-items: flex-start; margin-bottom: 10px; cursor: pointer; position: relative; }
+.sl-thumb .n { width: 18px; text-align: right; font-size: 12px; color: var(--ix-muted); padding-top: 2px; flex: none; }
+.sl-thumb .box { flex: 1; border: 2px solid transparent; border-radius: 10px; transition: transform .18s, box-shadow .18s; overflow: hidden; position: relative; background: #fff; box-shadow: 0 0 0 1px var(--ix-line); }
+.sl-thumb.on .box { border-color: var(--ox); box-shadow: 0 8px 18px -10px var(--ox); transform: translateX(2px); }
+.sl-thumb.on .n { color: var(--ox-ink); font-weight: 700; }
+.sl-thumb.drop::before { content: ""; position: absolute; left: 22px; right: 0; top: -6px; height: 3px; background: var(--ox); border-radius: 2px; }
+.sl-thumb img.pic { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.sl-work { flex: 1; min-width: 0; display: flex; flex-direction: column;
+  background: radial-gradient(circle, color-mix(in srgb, var(--ox) 22%, transparent) 1px, transparent 1.4px) 0 0 / 22px 22px, #f6f7fb; }
+:root[data-theme="dark"] .sl-work { background: radial-gradient(circle, color-mix(in srgb, var(--ox) 30%, transparent) 1px, transparent 1.4px) 0 0 / 22px 22px, #12131f; }
+.sl-stage { flex: 1; min-height: 0; overflow: auto; display: grid; place-items: center; padding: 18px; }
+.sl-notes { border-top: 1px solid var(--ix-line); background: var(--ix-panel); }
+.sl-notes textarea { width: 100%; height: 100%; resize: none; border: 0; outline: none; padding: 10px 16px; background: transparent; color: var(--ix-ink); font: 13.5px Arial, sans-serif; }
+.sl-slide { position: relative; overflow: hidden; background: #fff; border-radius: 4px; box-shadow: 0 0 0 1px rgba(30,32,60,.06), 0 2px 4px rgba(30,32,60,.06), 0 22px 50px -20px color-mix(in srgb, var(--ox) 50%, rgba(30,32,60,.4)); flex: none; user-select: none; -webkit-user-select: none; color: #000; }
+.sl-slide.mini { box-shadow: none; pointer-events: none; }
+.se { position: absolute; transform-origin: 0 0; box-sizing: border-box; }
+.se.pick { cursor: move; }
+.se.decor { pointer-events: none; }
+.se > svg.art { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.se > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none; }
+.se .tx { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: visible; white-space: pre-wrap; overflow-wrap: break-word; line-height: 1.2; outline: none; }
+.se .tx > .ti { outline: none; min-height: 1em; }
+.se .tx.edit > .ti { cursor: text; user-select: text; -webkit-user-select: text; caret-color: #000; }
+.se .hint { color: #80868b; pointer-events: none; }
+.st-p { min-height: 1em; }
+.st-b { user-select: none; }
+.se table { border-collapse: collapse; table-layout: fixed; position: absolute; inset: 0; width: 100%; height: 100%; }
+.se td { border: 1px solid #9e9e9e; vertical-align: top; position: relative; padding: 0; overflow: hidden; }
+.se td .tx { position: relative; inset: auto; min-height: 100%; }
+.sl-selbox { position: absolute; border: 1.5px solid var(--ox); pointer-events: none; transform-origin: 0 0; box-sizing: border-box; }
+.sl-h { position: absolute; width: 10px; height: 10px; background: #fff; border: 2px solid var(--ox); border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,.2); pointer-events: auto; margin: -5px 0 0 -5px; }
+.sl-chip { position: absolute; inset: 0; display: grid; place-items: center; background: repeating-linear-gradient(45deg, #eef0f6, #eef0f6 8px, #e6e8f0 8px, #e6e8f0 16px); color: #6a6e8a; font: 12px Arial, sans-serif; text-align: center; }
+.sl-present { position: fixed; inset: 0; z-index: 90; background: #000; display: grid; place-items: center; cursor: none; }
+.sl-present.ui { cursor: default; }
+.sl-present img { max-width: 100vw; max-height: 100vh; object-fit: contain; }
+.sl-pbar { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; background: rgba(20,21,43,.72); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.12); color: #fff; border-radius: 14px; padding: 4px 8px; font-size: 13px; opacity: 0; transition: opacity .2s; z-index: 91; }
+.sl-present.ui .sl-pbar { opacity: 1; }
+.sl-pbar button { color: #fff !important; }
+.sl-layouts { display: grid; grid-template-columns: repeat(2, 150px); gap: 10px; max-height: 60vh; overflow-y: auto; }
+.sl-layouts button { border: 1px solid var(--ix-line); border-radius: 12px; background: var(--ix-panel); padding: 6px; cursor: pointer; text-align: center; font-size: 12px; color: var(--ix-ink); }
+.sl-layouts button:hover { border-color: var(--ox); }
+.sl-lay { width: 136px; height: 77px; background: #fff; position: relative; border: 1px solid #e2e4ee; margin-bottom: 4px; }
+.sl-lay i { position: absolute; border: 1px dashed #9aa0a6; background: #eef0f6; }
+.sl-lock { position: absolute; inset: 0; z-index: 4; cursor: progress; }
+@media (max-width: 640px) {
+  .sl-main { flex-direction: column-reverse; }
+  .sl-strip { width: auto; height: 92px; display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden; border-right: 0; border-top: 1px solid var(--ix-line); padding: 6px; }
+  .sl-thumb { width: 120px; flex: none; margin: 0; }
+  .sl-thumb .n { display: none; }
+  .sl-stage { padding: 8px; }
+  .sl-notes { display: none; }
+}

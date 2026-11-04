@@ -1,0 +1,36 @@
+import type { AppManifest } from "../types";
+
+export const sheets: AppManifest = {
+  id: "sheets",
+  name: "Sheets",
+  desc: "Manage data",
+  color: "linear-gradient(135deg,#0f766e,#2dd4bf)",
+  icon: "sheets",
+  status: "live",
+  href: "/sheets",
+  mountPath: "/sheets",
+  source: "apps/sheets",
+  order: 3,
+  features: [
+    { key: "sheets.google", label: "Open their Google Sheets", group: "Google", hint: "Connect Google Drive and work with their files" },
+    { key: "sheets.google.edit", label: "Create, edit and delete Google Sheets", group: "Google", hint: "Edit cells and rows, add tabs, new files, rename, copy, move to Trash" },
+    { key: "sheets.google.live", label: "Use a Google Sheet as live data for an app", group: "Google", hint: "The app updates when the sheet changes" },
+    { key: "sheets.create", label: "Create workbooks", group: "Workbooks" },
+    { key: "sheets.edit", label: "Edit", group: "Workbooks" },
+    { key: "sheets.comment", label: "Comment", group: "Workbooks" },
+    { key: "sheets.delete", label: "Delete", group: "Workbooks", risk: true },
+    { key: "sheets.share.internal", label: "Share inside the company", group: "Sharing" },
+    { key: "sheets.share.external", label: "Share outside the company", group: "Sharing", risk: true },
+    { key: "sheets.export", label: "Download / export", group: "Sharing" },
+    { key: "sheets.import", label: "Import files", group: "Sharing" },
+    { key: "sheets.ai", label: "AI formulas and analysis", group: "Power" },
+    { key: "sheets.pivot", label: "Pivots and charts", group: "Power" },
+    { key: "sheets.scripts", label: "Scripts and automations", group: "Power", plan: "BUSINESS" },
+    { key: "sheets.history.restore", label: "Restore old versions", group: "Power" },
+  ],
+  roadmap: [
+    "Sign in through IOTx (the sheets engine has no accounts yet)",
+    "Open, edit, share, export, AI and scripts as switches",
+    "Sheets as a data source for built apps",
+  ],
+};
