@@ -1,12 +1,16 @@
 "use client";
 
 import { inspectZip, type ZipSummary } from "@/lib/zip-inspect";
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useEscape } from "./useEscape";
 import { useBrand } from "@/components/BrandProvider";
 import { useRouter } from "next/navigation";
-import { Download, FileText, GitBranch, Globe, Loader2, Paperclip, X } from "lucide-react";
+import { Download, FileText, GitBranch, Globe, ListChecks, Loader2, Maximize2, Minimize2, Paperclip, X } from "lucide-react";
+import DictateButton from "./chat/DictateButton";
+import { usePerms } from "./iotx/PermsProvider";
 import EnvRows, { type EnvRow } from "./EnvRows";
+
+const MAX_LINES = 10;
 
 const STARTERS = [
   { label: "Coffee shop site", prompt: "A website for a neighbourhood coffee shop with a menu, opening hours, a gallery and an online order form." },
@@ -44,6 +48,25 @@ export default function Composer({ initialPrompt = "" }: { initialPrompt?: strin
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Plan first: the new project's first message runs in Plan mode (a plan to approve before building).
+  const perms = usePerms();
+  const canPlan = perms.builder && perms.can("builder.plan");
+  const [plan, setPlan] = useState(false);
+  // The box grows with the text up to MAX_LINES; past that it scrolls and an expand button opens it tall.
+  const box = useRef<HTMLTextAreaElement>(null);
+  const [overflow, setOverflow] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const line = parseFloat(getComputedStyle(el).lineHeight) || 20;
+    const max = expanded ? Math.round(window.innerHeight * 0.6) : line * MAX_LINES + 8;
+    el.style.height = "auto";
+    const full = el.scrollHeight;
+    el.style.height = `${Math.max(line * 3 + 8, Math.min(full, max))}px`;
+    setOverflow(full > line * MAX_LINES + 8);
+  }, [value, expanded]);
+  useEscape(expanded ? () => setExpanded(false) : null);
 
   function addFiles(list: FileList | File[]) {
     const picked = Array.from(list);
@@ -92,6 +115,7 @@ export default function Composer({ initialPrompt = "" }: { initialPrompt?: strin
       if (sent.length) sessionStorage.setItem(`seedFiles:${project.id}`, JSON.stringify(sent));
       const note = failed.length ? `\n\n(These files couldn't be uploaded: ${failed.join(", ")}.)` : "";
       sessionStorage.setItem(`seed:${project.id}`, prompt + note);
+      if (plan && canPlan) sessionStorage.setItem(`seedMode:${project.id}`, "plan");
       router.push(`/projects/${project.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
@@ -136,7 +160,21 @@ export default function Composer({ initialPrompt = "" }: { initialPrompt?: strin
             ))}
           </div>
         )}
+        <div className="relative">
+        {(overflow || expanded) && (
+          <button
+            type="button"
+            onClick={() => setExpanded((x) => !x)}
+            aria-label={expanded ? "Collapse the message box" : "Expand the message box"}
+            title={expanded ? "Collapse (Esc)" : "Expand to see everything"}
+            className="absolute right-0 top-0 z-10 grid h-7 w-7 place-items-center rounded-lg hover:bg-black/[.05] dark:hover:bg-white/[.08]"
+            style={{ color: "var(--muted)", background: "var(--panel)" }}
+          >
+            {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          </button>
+        )}
         <textarea
+          ref={box}
           value={value}
           onChange={(e) => {
             setValue(e.target.value);
@@ -157,8 +195,9 @@ export default function Composer({ initialPrompt = "" }: { initialPrompt?: strin
           autoFocus={!!initialPrompt}
           aria-label="Describe your app"
           placeholder="Describe the app you want to build…"
-          className="w-full resize-none bg-transparent px-1.5 py-1 text-sm outline-none placeholder:opacity-50 disabled:opacity-60"
+          className={`w-full resize-none overflow-y-auto bg-transparent px-1.5 py-1 text-sm outline-none placeholder:opacity-50 disabled:opacity-60 ${overflow || expanded ? "pr-8" : ""}`}
         />
+        </div>
         <div className="flex items-center justify-between pt-1.5">
           <input
             ref={fileRef}
@@ -179,6 +218,19 @@ export default function Composer({ initialPrompt = "" }: { initialPrompt?: strin
           >
             <Paperclip className="h-4 w-4" />
           </button>
+          <DictateButton onText={(t) => setValue((v) => (v && !/\s$/.test(v) ? `${v} ${t}` : `${v}${t}`))} />
+          {canPlan && (
+            <button
+              type="button"
+              onClick={() => setPlan((p) => !p)}
+              aria-pressed={plan}
+              title={plan ? "Plan first is on: the agent proposes a plan you approve before it builds" : "Plan first: the agent proposes a plan you approve before it builds"}
+              className={`ml-1 flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs ${plan ? "font-medium" : "hover:bg-black/[.04] dark:hover:bg-white/[.06]"}`}
+              style={plan ? { background: "var(--accent-soft)", color: "var(--accent)" } : { color: "var(--muted)" }}
+            >
+              <ListChecks className="h-3.5 w-3.5" /> Plan
+            </button>
+          )}
           <button
             onClick={() => setImportOpen(true)}
             className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs hover:bg-black/[.04] dark:hover:bg-white/[.06]"
@@ -203,7 +255,7 @@ export default function Composer({ initialPrompt = "" }: { initialPrompt?: strin
               disabled={busy || (!value.trim() && !files.length)}
               className="btn-primary rounded-xl px-4 py-1.5 text-sm font-medium"
             >
-              Build
+              {plan && canPlan ? "Plan" : "Build"}
             </button>
           </div>
         </div>

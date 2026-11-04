@@ -1,7 +1,7 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, type KeyboardEvent, type TextareaHTMLAttributes } from "react";
-import { Bold, Code, Italic, List, ListOrdered, SquareCode } from "lucide-react";
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type TextareaHTMLAttributes } from "react";
+import { Bold, Code, Italic, List, ListOrdered, Maximize2, Minimize2, SquareCode } from "lucide-react";
 import { codeBlock, continueList, deleteMention, list, segments, wrap, type Edit } from "@/lib/composer-format";
 
 type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "value" | "onChange"> & {
@@ -46,15 +46,23 @@ const RichInput = forwardRef<HTMLTextAreaElement, Props>(function RichInput({ va
     return () => el.removeEventListener("iotx-ref", on);
   }, []);
 
-  // Grow with the text, up to maxRows, then scroll.
+  // Grow with the text, up to maxRows, then scroll; past that an expand button opens it tall.
+  const [overflow, setOverflow] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
     el.style.height = "auto";
     const line = parseFloat(getComputedStyle(el).lineHeight) || 20;
-    el.style.height = `${Math.min(el.scrollHeight, line * maxRows + 8)}px`;
+    const cap = line * maxRows + 8;
+    el.style.height = `${Math.min(el.scrollHeight, expanded ? Math.max(cap, Math.round(window.innerHeight * 0.6)) : cap)}px`;
+    setOverflow(el.scrollHeight > cap);
     if (layer.current) layer.current.scrollTop = el.scrollTop;
-  }, [value, maxRows]);
+  }, [value, maxRows, expanded]);
+  useEffect(() => {
+    if (!value) setExpanded(false);
+  }, [value]);
+  const pad = overflow || expanded ? " !pr-7" : "";
 
   function apply(e: Edit) {
     onValue(e.text);
@@ -86,6 +94,11 @@ const RichInput = forwardRef<HTMLTextAreaElement, Props>(function RichInput({ va
         run();
         return;
       }
+    }
+    if (e.key === "Escape" && expanded && !menuOpen) {
+      e.preventDefault();
+      setExpanded(false);
+      return;
     }
     if (e.key === "Backspace" && s === end && !mod) {
       const d = deleteMention(value, s, known);
@@ -119,12 +132,25 @@ const RichInput = forwardRef<HTMLTextAreaElement, Props>(function RichInput({ va
   return (
     <div>
       <div className="relative">
+        {(overflow || expanded) && (
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setExpanded((x) => !x)}
+            aria-label={expanded ? "Collapse the message box" : "Expand the message box"}
+            title={expanded ? "Collapse (Esc)" : "Expand to see everything"}
+            className="absolute -right-1 -top-1 z-10 grid h-6 w-6 place-items-center rounded-md hover:bg-black/[.05] dark:hover:bg-white/[.08]"
+            style={{ color: "var(--muted)", background: "var(--panel)" }}
+          >
+            {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          </button>
+        )}
         {/* The chip layer: same box, font and wrapping as the textarea, text invisible, chips visible. */}
         {hasChips && (
           <div
             ref={layer}
             aria-hidden
-            className={`pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words text-transparent ${className ?? ""}`}
+            className={`pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words text-transparent ${className ?? ""}${pad}`}
           >
             {parts.map((p, i) =>
               p.kind === "text" ? (
@@ -146,7 +172,7 @@ const RichInput = forwardRef<HTMLTextAreaElement, Props>(function RichInput({ va
           onScroll={(e) => {
             if (layer.current) layer.current.scrollTop = e.currentTarget.scrollTop;
           }}
-          className={`relative ${className ?? ""}`}
+          className={`relative ${className ?? ""}${pad}`}
           data-iotx-refs={onRef ? "inline" : undefined}
           {...rest}
         />
