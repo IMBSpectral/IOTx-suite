@@ -35,8 +35,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // user must be explicitly undefined: server-side auth() otherwise adds it back.
         return { user: undefined, expires: session.expires, mfaPending: true, mfaUserId: user.id } as unknown as typeof session;
       }
-      if (session.user) session.user.id = user.id;
-      return session;
+      // Only who is signed in and until when: the stored session row (its token, mfaAt…)
+      // must never reach the browser through /api/auth/session.
+      return {
+        user: { id: user.id, name: session.user?.name ?? null, email: session.user?.email ?? user.email, image: session.user?.image ?? null },
+        expires: session.expires,
+      } as unknown as typeof session;
     },
   },
   events: {
