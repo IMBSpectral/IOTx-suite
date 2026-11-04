@@ -56,10 +56,10 @@ function Collage() {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ redirect?: string; sso_error?: string; error?: string; check?: string }>;
+  searchParams: Promise<{ redirect?: string; sso_error?: string; error?: string; check?: string; pw_error?: string; email?: string }>;
 }) {
   const session = await auth();
-  const { redirect: raw, sso_error: ssoError, error: authError, check } = await searchParams;
+  const { redirect: raw, sso_error: ssoError, error: authError, check, pw_error: pwError, email: lastEmail } = await searchParams;
   // Only paths on this site: an outside address here would be an open redirect.
   const to = raw && raw.startsWith("/") && !raw.startsWith("//") && !raw.startsWith("/\\") ? raw : undefined;
   if (session?.user) redirect(to ?? "/home");
@@ -81,6 +81,23 @@ export default async function LoginPage({
           </h1>
           <p className="si-muted">Sign in to your company&rsquo;s workspace.</p>
 
+          {/* Email and password. */}
+          <form className="si-sso si-pw" method="post" action="/api/password-login">
+            <input type="hidden" name="next" value={to ?? "/home"} />
+            <label htmlFor="pw-email">Email</label>
+            <input id="pw-email" name="email" type="email" required autoComplete="username" placeholder="you@company.com" defaultValue={lastEmail ?? ""} />
+            <label htmlFor="pw-password">Password</label>
+            <input id="pw-password" name="password" type="password" required autoComplete="current-password" />
+            <button className="si-btn si-btn-main">Sign in</button>
+          </form>
+          {pwError && (
+            <p className="si-error" role="alert">
+              {pwError}
+            </p>
+          )}
+
+          <div className="si-or"><span>or get a sign-in link</span></div>
+
           {/* Work email: single sign-on when the domain has it, otherwise an emailed sign-in link. */}
           <form
             className="si-sso"
@@ -96,7 +113,7 @@ export default async function LoginPage({
             <label htmlFor="sso-email">Work email</label>
             <div>
               <input id="sso-email" name="email" type="email" required placeholder="you@company.com" />
-              <button className="si-btn si-btn-main">Continue</button>
+              <button className="si-btn">Email me a link</button>
             </div>
             {emailSignInEnabled() && <p className="si-hint">We&rsquo;ll use your company&rsquo;s sign-in, or email you a link.</p>}
           </form>

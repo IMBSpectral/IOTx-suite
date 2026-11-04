@@ -72,3 +72,8 @@
 @media (prefers-reduced-motion: reduce) { .si-win, .si-toast, .si-bars span { animation: none; } }
 .si-hint { margin: 8px 0 0; color: #6a6e8a; font-size: 12.5px; }
 .si-ok { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: #ecfdf5; color: #065f46; font-size: 13.5px; }
+/* Email and password: stacked fields, full-width button. */
+.si-pw { display: flex; flex-direction: column; gap: 6px; }
+.si-pw label { margin: 6px 0 0; }
+.si-pw input { width: 100%; }
+.si-pw .si-btn { width: 100%; margin-top: 12px; }

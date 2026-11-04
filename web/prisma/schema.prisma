@@ -39,6 +39,9 @@ model User {
   mfaSecret           Json?
   mfaEnabledAt        DateTime?
   mfaRecovery         Json?
+  // Password sign-in (scrypt hash; null: this person signs in by email link or single sign-on only).
+  passwordHash        String?
+  passwordSetAt       DateTime?
 
   accounts    Account[]
   sessions    Session[]
