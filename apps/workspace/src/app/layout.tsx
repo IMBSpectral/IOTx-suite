@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import "./globals.css";
+import { DRAFT_SCRIPT } from "@/lib/draft-keeper";
 import { SUITE_URL } from "@/lib/env";
 
 // Same fonts as the suite (web/src/app/layout.tsx).
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${geist.variable} ${geistMono.variable} ${serif.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: DRAFT_SCRIPT }} />
       </head>
       <body className="ix antialiased">{children}</body>
     </html>

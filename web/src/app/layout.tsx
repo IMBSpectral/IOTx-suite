@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import "./globals.css";
+import { DRAFT_SCRIPT } from "@/lib/draft-keeper";
 import { getBrand } from "@/lib/brand";
 import { BrandProvider } from "@/components/BrandProvider";
 
@@ -45,6 +46,7 @@ export default function RootLayout({
     <html lang="en" className={`${geist.variable} ${geistMono.variable} ${serif.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: DRAFT_SCRIPT }} />
       </head>
       <body className="antialiased">
         <BrandProvider brand={getBrand()}>{children}</BrandProvider>
