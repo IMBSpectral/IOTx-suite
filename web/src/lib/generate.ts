@@ -26,6 +26,23 @@ import { repoDir } from "./paths";
 import { feedLiveWrite, startLiveWrite, takeLiveWrite, type LiveWrite } from "./live-write";
 import { formatLogs, readLogs } from "./runtime-logs";
 import { attachmentBlocks, readUpload, type Attachment } from "./uploads";
+import { findSheet, readWorkbook, sheetRows, type Workbook } from "./spreadsheet";
+
+/** Parsed workbooks for read_spreadsheet, kept briefly so paging through a big file stays fast. */
+const workbooks = new Map<string, { at: number; wb: Promise<Workbook | null> }>();
+function cachedWorkbook(projectId: string, id: string) {
+  const key = `${projectId}:${id}`;
+  const now = Date.now();
+  for (const [k, v] of workbooks) if (now - v.at > 10 * 60_000) workbooks.delete(k);
+  const hit = workbooks.get(key);
+  if (hit) return hit.wb;
+  const wb = readUpload(projectId, id, { original: true })
+    .then((u) => (u && /\.xls[xm]$/i.test(u.meta.name) ? readWorkbook(u.bytes) : null))
+    .catch(() => null);
+  workbooks.set(key, { at: now, wb });
+  if (workbooks.size > 8) workbooks.delete(workbooks.keys().next().value!);
+  return wb;
+}
 import {
   ArchiveError,
   extractAll,
@@ -693,6 +710,31 @@ function buildTools(projectId: string, onFile: (e: BuildEvent) => void, userId: 
       return rel.startsWith("public/")
         ? `Saved ${rel}. Reference it as "${rel.slice("public".length)}".`
         : `Saved ${rel}.`;
+    },
+  });
+
+  // Big workbooks arrive as an overview; this reads any part of any sheet, so nothing
+  // past the first slice is out of reach.
+  const readSpreadsheet = betaZodTool({
+    name: "read_spreadsheet",
+    description:
+      "Read rows from an Excel file (.xlsx/.xlsm) the user attached: one sheet at a time, by row range or by a search text. " +
+      "Use it whenever a workbook was sent as an overview, before relying on its numbers. Rows are numbered like Excel; the heading row comes first. " +
+      "Up to 300 rows per call: page with from_row. Leave sheet out to list the sheets.",
+    inputSchema: z.object({
+      id: z.string().describe("The attachment id listed with the message"),
+      sheet: z.string().optional().describe("Sheet name or number (1 = first). Leave out to list the sheets."),
+      from_row: z.number().int().min(1).optional(),
+      to_row: z.number().int().min(1).optional(),
+      contains: z.string().max(200).optional().describe("Only rows with a cell containing this text (case-insensitive)"),
+    }),
+    run: async ({ id, sheet, from_row, to_row, contains }) => {
+      const wb = await cachedWorkbook(projectId, id);
+      if (!wb) return `No Excel attachment with id ${id}.`;
+      if (!sheet) return wb.sheets.map((s, i) => `${i + 1}. ${s.name}${s.hidden ? " (hidden)" : ""}: ${s.rows.length} rows`).join("\n");
+      const s = findSheet(wb, sheet);
+      if (!s) return `No sheet "${sheet}". Sheets: ${wb.sheets.map((x, i) => `${i + 1}. ${x.name}`).join(", ")}`;
+      return sheetRows(s, { from: from_row, to: to_row, contains });
     },
   });
 
@@ -1862,6 +1904,7 @@ ${r.text}`;
     turnReport,
     viewAppTool,
     saveAttachment,
+    readSpreadsheet,
     readArchive,
     importArchive,
     workflowsList,

@@ -3,6 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { PROJECTS_ROOT } from "./paths";
 import { compressImage } from "./image-compress";
+import { readWorkbook, workbookOverview, workbookText } from "./spreadsheet";
 
 /**
  * Files attached to chat messages: images, PDFs, documents and pasted text.
@@ -119,6 +120,8 @@ const PDF_INLINE_MAX = 4 * 1024 * 1024;
 const PDF_INLINE_PAGES = 90;
 const TEXT_BUDGET = 200_000;
 const TEXT_PER_FILE = 60_000;
+/** A workbook up to this size (as text) is sent whole; a bigger one as an overview plus read_spreadsheet. */
+const SHEET_INLINE_MAX = 30_000;
 
 const xmlText = (s: string) => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
 
@@ -138,38 +141,9 @@ async function docxText(bytes: Buffer) {
     .join("\n");
 }
 
-/** Excel: every sheet as tab-separated rows (values as shown in the cells' stored form). */
+/** Excel: every sheet as tab-separated rows, dates as dates (see spreadsheet.ts). */
 export async function xlsxText(bytes: Buffer, maxRows = 400) {
-  const JSZip = (await import("jszip")).default;
-  const zip = await JSZip.loadAsync(bytes);
-  const shared = [...((await zip.file("xl/sharedStrings.xml")?.async("string")) ?? "").matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) =>
-    xmlText([...m[1].matchAll(/<t(?:\s[^>]*)?>([^<]*)<\/t>/g)].map((t) => t[1]).join("")),
-  );
-  const book = (await zip.file("xl/workbook.xml")?.async("string")) ?? "";
-  const rels = (await zip.file("xl/_rels/workbook.xml.rels")?.async("string")) ?? "";
-  const target = (rid: string) => new RegExp(`Id="${rid}"[^>]*Target="([^"]+)"|Target="([^"]+)"[^>]*Id="${rid}"`).exec(rels);
-  const col = (ref: string) => [...ref.replace(/\d+/g, "")].reduce((n, c) => n * 26 + c.charCodeAt(0) - 64, 0) - 1;
-  const out: string[] = [];
-  for (const m of book.matchAll(/<sheet [^>]*name="([^"]+)"[^>]*r:id="([^"]+)"/g)) {
-    const t = target(m[2]);
-    const file = (t?.[1] ?? t?.[2] ?? "").replace(/^\/?(xl\/)?/, "xl/");
-    const xml = await zip.file(file)?.async("string");
-    if (!xml) continue;
-    const rows: string[] = [];
-    for (const r of xml.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)) {
-      const cells: string[] = [];
-      for (const c of r[1].matchAll(/<c r="([A-Z]+\d+)"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
-        const kind = /t="(\w+)"/.exec(c[2])?.[1];
-        const v = /<v>([^<]*)<\/v>/.exec(c[3] ?? "")?.[1] ?? "";
-        const val = kind === "s" ? shared[Number(v)] ?? "" : kind === "inlineStr" ? xmlText([...(c[3] ?? "").matchAll(/<t[^>]*>([^<]*)<\/t>/g)].map((x) => x[1]).join("")) : xmlText(v);
-        cells[col(c[1])] = val.replace(/\s+/g, " ").trim();
-      }
-      if (cells.some(Boolean)) rows.push(Array.from(cells, (x) => x ?? "").join("\t"));
-      if (rows.length >= maxRows) break;
-    }
-    if (rows.length) out.push(`## Sheet: ${xmlText(m[1])}\n${rows.join("\n")}`);
-  }
-  return out.join("\n\n");
+  return workbookText(await readWorkbook(bytes, maxRows));
 }
 
 /** PowerPoint: each slide's text. */
@@ -248,8 +222,21 @@ export async function attachmentBlocks(projectId: string, list: Attachment[]) {
         const text = await docxText(u.bytes);
         note = text ? addText(a.name, text, "Word document") : "no text found";
       } else if (e === "xlsx" || e === "xlsm" || a.type.includes("spreadsheetml")) {
-        const text = await xlsxText(u.bytes);
-        note = text ? addText(a.name, text, "Excel workbook, tab-separated rows") : "no cells found";
+        // Small workbooks go in whole. Big ones would be cut off after the first sheets,
+        // so the AI gets every sheet's shape and first rows and reads the rest on demand.
+        const wb = await readWorkbook(u.bytes);
+        const full = workbookText(wb);
+        if (!full) note = "no cells found";
+        else if (full.length <= SHEET_INLINE_MAX) note = addText(a.name, full, "Excel workbook, every row, tab-separated");
+        else
+          note = addText(
+            a.name,
+            `${workbookOverview(wb)}
+
+This workbook has ${wb.sheets.length} sheets and ${wb.sheets.reduce((n, x) => n + x.rows.length, 0)} rows in all: too much to show at once. ` +
+              `Read the rows you need with read_spreadsheet (id ${a.id}, a sheet name or number, a row range or a search text) before relying on any numbers.`,
+            "Excel workbook overview: every sheet with its size, headings and first rows",
+          );
       } else if (e === "pptx" || a.type.includes("presentationml")) {
         const text = await pptxText(u.bytes);
         note = text ? addText(a.name, text, "PowerPoint slides") : "no text found";
