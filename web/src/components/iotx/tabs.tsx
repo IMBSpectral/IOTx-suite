@@ -135,7 +135,12 @@ export function tabTitle(docTitle: string, url: string, brandName: string) {
 }
 
 /** Sets the page's title (the tab's title in the suite) while it's shown. */
-export function useTabTitle(title: string | null | undefined) {
+export function useTabTitle(raw: string | null | undefined) {
+  // The browser stores a title with its spaces squeezed (a line break or double space
+  // becomes one space). Compare and set that form: comparing the raw name never matched,
+  // so the watcher below reset the title forever and froze the page (a project named
+  // from a two-line prompt, Nov 2026).
+  const title = raw?.replace(/\s+/g, " ").trim();
   useEffect(() => {
     if (!title) return;
     document.title = title;

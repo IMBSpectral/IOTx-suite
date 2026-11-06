@@ -90,7 +90,7 @@ export default function Composer({ initialPrompt = "" }: { initialPrompt?: strin
       const res = await fetch("/api/projects", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: prompt.slice(0, 60), force, env: envOpen ? env : [] }),
+        body: JSON.stringify({ name: prompt.replace(/\s+/g, " ").trim().slice(0, 60), force, env: envOpen ? env : [] }),
       });
       if (res.status === 409) {
         const d = await res.json();

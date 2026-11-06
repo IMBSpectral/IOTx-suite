@@ -33,7 +33,7 @@ async function PATCH_(req: Request, { params }: Ctx) {
   const data: Record<string, unknown> = {};
 
   if (typeof body.name === "string") {
-    const name = body.name.trim().slice(0, 80);
+    const name = body.name.replace(/\s+/g, " ").trim().slice(0, 80);
     if (!name) return Response.json({ error: "Name is required" }, { status: 400 });
     data.name = name;
   }

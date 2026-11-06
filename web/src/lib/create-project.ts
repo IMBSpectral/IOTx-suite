@@ -33,7 +33,8 @@ export async function createProject(opts: {
   files?: { path: string; bytes: Buffer }[];
   message?: string;
 }) {
-  const label = opts.name.trim().slice(0, 80) || "Untitled project";
+  // One line, single spaces: names made from a pasted prompt carried line breaks into tab titles.
+  const label = opts.name.replace(/\s+/g, " ").trim().slice(0, 80) || "Untitled project";
   const slug = hostLabel(label);
 
   const project = await db.project.create({
