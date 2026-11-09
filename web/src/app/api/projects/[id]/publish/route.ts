@@ -1,4 +1,5 @@
 import { requireProjectPerm } from "@/lib/iotx/permissions";
+import { RESERVED_SUBDOMAINS } from "@/lib/site-host";
 import { getBrand } from "@/lib/brand";
 import { db } from "@/lib/db";
 import { runCheckHooks } from "@/lib/event-destinations";
@@ -238,17 +239,18 @@ async function PATCH_(req: Request, { params }: Ctx) {
   if (typeof body.subdomain === "string") {
     const sub = body.subdomain.trim().toLowerCase();
     // "--" is reserved for preview hosts (preview--<token>).
-    if (
-      !/^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/.test(sub) ||
-      sub.includes("--")
-    ) {
+    // 2–63 characters: short names like "hr" are fine. "--" is reserved for preview hosts.
+    if (!/^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/.test(sub) || sub.includes("--")) {
       return Response.json(
         {
           error:
-            "Use 3–63 lowercase letters, numbers or hyphens, not starting or ending with a hyphen.",
+            "Use 2–63 lowercase letters, numbers or hyphens, not starting or ending with a hyphen.",
         },
         { status: 400 },
       );
+    }
+    if (RESERVED_SUBDOMAINS.has(sub)) {
+      return Response.json({ error: `"${sub}" is reserved for the platform. Pick another address.` }, { status: 400 });
     }
     data.subdomain = sub;
   }

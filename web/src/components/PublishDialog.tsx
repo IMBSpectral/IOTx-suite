@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useBrand } from "@/components/BrandProvider";
 import { useEscape } from "./useEscape";
 import RoutePreviews from "./RoutePreviews";
@@ -83,6 +83,9 @@ export default function PublishDialog({
   const [step, setStep] = useState<string | null>(null);
   const [checks, setChecks] = useState<Checks | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Why the last address change was refused, shown under the address box.
+  const [addrError, setAddrError] = useState<string | null>(null);
+  const lastError = useRef<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [openCheck, setOpenCheck] = useState<string | null>(null);
@@ -136,7 +139,8 @@ export default function PublishDialog({
     const d = await res.json().catch(() => ({}));
     setSaving(false);
     if (!res.ok) {
-      setError(d.error ?? "Could not save");
+      lastError.current = d.error ?? "Could not save";
+      setError(lastError.current);
       return false;
     }
     setInfo((i) => (i ? { ...i, ...d } : d));
@@ -355,10 +359,13 @@ export default function PublishDialog({
             <span className="text-xs font-medium">Address</span>
             <div className="mt-1 flex items-center gap-1.5">
               <div className="flex min-w-0 flex-1 items-center rounded-lg border px-2 py-1 font-mono text-xs">
-                <span style={{ color: "var(--muted)" }}>http://</span>
+                <span style={{ color: "var(--muted)" }}>{sitesProtocol()}//</span>
                 <input
                   value={sub}
-                  onChange={(e) => setSub(e.target.value.toLowerCase())}
+                  onChange={(e) => {
+                    setSub(e.target.value.toLowerCase());
+                    setAddrError(null);
+                  }}
                   aria-label="Subdomain"
                   readOnly={!canRename}
                   title={canRename ? undefined : "Choosing the subdomain isn't turned on for your role"}
@@ -367,11 +374,23 @@ export default function PublishDialog({
                 <span style={{ color: "var(--muted)" }}>.{sitesHost()}</span>
               </div>
               {sub !== info?.subdomain && (
-                <button disabled={saving} onClick={() => void save({ subdomain: sub })} className="rounded-md border px-2 py-1 text-xs">
+                <button
+                  disabled={saving}
+                  onClick={async () => {
+                    setAddrError(null);
+                    if (!(await save({ subdomain: sub }))) setAddrError(lastError.current ?? "Couldn't save this address.");
+                  }}
+                  className="rounded-md border px-2 py-1 text-xs"
+                >
                   Save
                 </button>
               )}
             </div>
+            {addrError && (
+              <p role="alert" className="mt-1 text-[11px] text-red-600 dark:text-red-400">
+                {addrError}
+              </p>
+            )}
           </label>
 
           <fieldset>
