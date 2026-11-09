@@ -169,7 +169,11 @@ export const CHECKS: SecurityCheck[] = [
     title: "Admin access decided in the browser",
     looksFor: "An admin or role flag read from localStorage, a URL or a hard-coded value.",
     appliesWhen: "The app has admin-only areas.", passesWhen: "Roles are checked on the server or by database rules.",
-    pattern: /(?:isAdmin|role)\s*(?:=|===?)\s*(?:true|["']admin["'])|localStorage\.getItem\(\s*["'](?:isAdmin|role|admin)/i,
+    // Only a role or admin flag being SET in browser code: `isAdmin = true`, `role = "admin"`,
+    // or one read from localStorage. Comparisons (`role === "admin"`, used to show or hide
+    // things) and type lists (`type Role = "admin" | "hr"`) are not access decisions; flagging
+    // them blocked publishing for apps whose roles live in the database (Nov 2026).
+    pattern: /\bisAdmin\s*=(?!=)\s*true\b|(?<!type\s+)\brole\s*=(?!=)\s*["']admin["'](?!\s*\|)|localStorage\.getItem\(\s*["'](?:isAdmin|role|admin)/i,
     files: CODE,
   },
   {
