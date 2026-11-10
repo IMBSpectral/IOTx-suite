@@ -2075,6 +2075,7 @@ const READ_ONLY_TOOLS = new Set([
   "create_visual",
   "create_document",
   "read_archive",
+  "read_spreadsheet",
   "list_workflows",
   "mcp_list_tools",
   "list_libraries",
