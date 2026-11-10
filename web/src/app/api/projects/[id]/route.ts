@@ -16,6 +16,7 @@ type Patch = {
   emoji?: string | null;
   notes?: string | null;
   isTemplate?: boolean;
+  reviewDrafts?: boolean;
   folderId?: string | null;
   restore?: boolean;
 };
@@ -71,6 +72,7 @@ async function PATCH_(req: Request, { params }: Ctx) {
   }
   if (body.notes !== undefined) data.notes = body.notes?.slice(0, 100_000) ?? null;
   if (typeof body.isTemplate === "boolean") data.isTemplate = body.isTemplate;
+  if (typeof body.reviewDrafts === "boolean") data.reviewDrafts = body.reviewDrafts;
   if (body.folderId !== undefined) {
     if (body.folderId) {
       const folder = await db.folder.findFirst({
@@ -89,7 +91,9 @@ async function PATCH_(req: Request, { params }: Ctx) {
   try {
     const updated = await db.project.update({ where: { id }, data });
     return Response.json({ project: updated });
-  } catch {
+  } catch (e) {
+    // Only a duplicate address is the user's to fix; anything else is a real error.
+    if ((e as { code?: string }).code !== "P2002") throw e;
     return Response.json({ error: "That domain or address is already taken" }, { status: 409 });
   }
 }

@@ -10,7 +10,8 @@ import { headSha as currentHead, exportTree } from "./repo";
 
 import { ensureSandbox, sandboxExec } from "./sandbox";
 import { mapsBuildEnv } from "./google-maps";
-import { syncLive } from "./cloud-envs";
+import { copyNewRecords, syncLive, type RecordsCopied } from "./cloud-envs";
+import { deployIfChanged } from "./cloud-functions";
 import { siteOrigin } from "./site-host";
 import git from "isomorphic-git";
 
@@ -403,8 +404,14 @@ export async function publishProject(projectId: string, onStep?: (step: StepId) 
   });
   // The backend's Live environment: made on the first publish, schema brought up to date after.
   const live = await syncLive(projectId).catch((e) => ({ created: false, applied: [] as string[], failed: [{ id: "", error: String(e) }] }));
+  // Accounts and records made in the preview go live with the version that uses them (adds only, never overwrites).
+  const records: RecordsCopied = live.created || live.failed.length
+    ? { tables: [], skipped: [] }
+    : await copyNewRecords(projectId).catch((e) => ({ tables: [], skipped: [{ table: "", reason: String(e).slice(0, 300) }] }));
+  // Server functions go live with the published version, not before.
+  await deployIfChanged(projectId).catch(() => undefined);
   onStep?.("live");
-  return { ...project, sha: result.sha, url: siteUrl(project.subdomain), checks: result, live };
+  return { ...project, sha: result.sha, url: siteUrl(project.subdomain), checks: result, live, records };
 }
 
 export async function unpublish(projectId: string) {

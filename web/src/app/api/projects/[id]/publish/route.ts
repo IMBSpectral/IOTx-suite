@@ -166,6 +166,8 @@ async function POST_(req: Request, { params }: Ctx) {
             url: result.url,
             sha: result.sha,
             checks: result.checks,
+            records: result.records,
+            liveDb: result.live,
           });
         }
       } catch (err) {

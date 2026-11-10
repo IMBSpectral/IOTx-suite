@@ -10,7 +10,7 @@ async function GET_(
 ) {
   const { id } = await params;
   const user = await requireUser();
-  await requireProject(user.id, id);
+  const project = await requireProject(user.id, id);
 
   // Whatever the preview is showing counts as seen by whoever is looking.
   const current = await currentDraftId(id);
@@ -21,6 +21,7 @@ async function GET_(
   return Response.json({
     current,
     cloud,
+    review: !!project.reviewDrafts,
     drafts: drafts.map((d, i) => ({
       id: d.id,
       name: d.name,
