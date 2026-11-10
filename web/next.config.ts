@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
   // esbuild, the Postgres driver and playwright-core (view_app) ship native
   // binaries or browser downloads; bundling them into
   // the server build breaks on the platform-specific files.
-  serverExternalPackages: ["esbuild", "isomorphic-git", "pg", "@prisma/client", "playwright-core"],
+  serverExternalPackages: ["esbuild", "isomorphic-git", "pg", "@prisma/client", "playwright-core", "@duckdb/node-api"],
   experimental: {
     // proxy.ts runs on every request, and Next caps bodies passing through it at 10 MB:
     // Files uploads go up to 2 GB (lib/files.ts checks the real limits).

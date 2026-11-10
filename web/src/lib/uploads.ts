@@ -126,7 +126,7 @@ const SHEET_INLINE_MAX = 30_000;
 const xmlText = (s: string) => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
 
 /** Word: paragraphs in order (headings as #). */
-async function docxText(bytes: Buffer) {
+export async function docxText(bytes: Buffer) {
   const JSZip = (await import("jszip")).default;
   const xml = await (await JSZip.loadAsync(bytes)).file("word/document.xml")?.async("string");
   if (!xml) return "";
@@ -147,7 +147,7 @@ export async function xlsxText(bytes: Buffer, maxRows = 400) {
 }
 
 /** PowerPoint: each slide's text. */
-async function pptxText(bytes: Buffer) {
+export async function pptxText(bytes: Buffer) {
   const JSZip = (await import("jszip")).default;
   const zip = await JSZip.loadAsync(bytes);
   const slides = Object.keys(zip.files).filter((f) => /^ppt\/slides\/slide\d+\.xml$/.test(f)).sort((a, b) => Number(/(\d+)/.exec(a)![1]) - Number(/(\d+)/.exec(b)![1]));
@@ -161,7 +161,7 @@ async function pptxText(bytes: Buffer) {
 }
 
 /** PDF text, page by page (for PDFs too big to send whole). */
-async function pdfPages(bytes: Buffer) {
+export async function pdfPages(bytes: Buffer) {
   const { extractText, getDocumentProxy } = await import("unpdf");
   const doc = await getDocumentProxy(new Uint8Array(bytes));
   const { text } = await extractText(doc, { mergePages: false });
