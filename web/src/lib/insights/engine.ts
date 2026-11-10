@@ -11,7 +11,8 @@
 import { DuckDBInstance, type DuckDBConnection } from "@duckdb/node-api";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { analysisDir, dbFile, InsightsError, type Analysis, type Table } from "./store";
+import { randomUUID } from "node:crypto";
+import { analysisDir, dbFile, InsightsError, type Analysis, type Link, type Table } from "./store";
 
 type Handle = { inst: DuckDBInstance; conn: DuckDBConnection; used: number; queue: Promise<unknown> };
 // One cache for the whole server process: Next can load this module once per route, and two
@@ -151,7 +152,7 @@ export async function query(a: Analysis, sql: string, o: { limit?: number; filte
     a,
     async (c) => {
       await assertSelect(c, sql);
-      const full = withFilters(sql, filterCtes(a.tables, o.filters ?? []));
+      const full = withFilters(sql, filterCtes(a.tables, expandFilters(a, o.filters ?? [])));
       try {
         return toResult(await c.runAndReadAll(full), limit);
       } catch (e) {
@@ -350,4 +351,123 @@ export async function links(a: Analysis) {
       out.push(`- ${q(x.c)} links ${names.slice(0, 6).map((n) => q(n.t.name)).join(", ")}${names.length > 6 ? ` and ${names.length - 6} more` : ""} (${shared} shared values between the first two)`);
   }
   return out.join("\n");
+}
+
+// ─── Data mapping: how tables connect ───────────────────────────────────────
+
+/**
+ * Filters reach linked tables too: "Emp. Code = 14396" on one sheet also filters the sheet
+ * that calls it "PayCode", following the analysis's links (two hops at most).
+ */
+export function expandFilters(a: Analysis, filters: Filter[]): Filter[] {
+  const links = (a.links ?? []).filter((l) => !l.off);
+  if (!links.length) return filters;
+  const out = [...filters];
+  for (const f of filters) {
+    if (!f.values?.length && f.from === undefined && f.to === undefined) continue;
+    const seen = new Set<string>();
+    const key = (t: string, c: string) => `${t}\u0001${c.toLowerCase()}`;
+    // Where the filter applies directly.
+    let frontier = a.tables
+      .filter((t) => !f.table || t.name === f.table)
+      .flatMap((t) => t.columns.filter((c) => c.name.toLowerCase() === f.column.toLowerCase()).map((c) => ({ table: t.name, column: c.name })));
+    frontier.forEach((p) => seen.add(key(p.table, p.column)));
+    for (let hop = 0; hop < 2 && frontier.length; hop++) {
+      const next: { table: string; column: string }[] = [];
+      for (const p of frontier)
+        for (const l of links) {
+          const other = l.from.table === p.table && l.from.column === p.column ? l.to : l.to.table === p.table && l.to.column === p.column ? l.from : null;
+          if (!other || seen.has(key(other.table, other.column))) continue;
+          seen.add(key(other.table, other.column));
+          next.push(other);
+          // Values compare as text; ranges only carry to columns of the same name.
+          out.push({ ...f, table: other.table, column: other.column, ...(f.values ? {} : { from: undefined, to: undefined }) });
+        }
+      frontier = next;
+    }
+  }
+  return out;
+}
+
+/** Column types that can hold keys (codes, ids, names): not measures, dates or yes/no. */
+const KEYISH = /^(VARCHAR|BIGINT|INTEGER|SMALLINT|HUGEINT|UBIGINT|UINTEGER)$/i;
+
+/**
+ * Find how tables connect by their values, whatever the columns are called: every
+ * key-like column's distinct values are compared with every other table's in one query.
+ * Links people turned off or added stay as they are.
+ */
+export async function discoverLinks(a: Analysis): Promise<Link[]> {
+  const kept = (a.links ?? []).filter((l) => l.by !== "auto" || l.off);
+  const offKey = new Set(kept.map((l) => [l.from.table, l.from.column, l.to.table, l.to.column].join("\u0001")));
+  const tables = a.tables.filter((t) => t.rows > 0).slice(0, 60);
+  if (tables.length < 2) return kept;
+  const cols = tables.flatMap((t) =>
+    t.columns
+      .filter((c) => KEYISH.test(c.type) && !/^(sheet|sheet title|s\.? ?no\.?|sr\.?no\.?|sl\.? ?no\.?|#)$/i.test(c.name.trim()))
+      .slice(0, 24)
+      .map((c) => ({ t: t.name, c: c.name })),
+  );
+  if (!cols.length) return kept;
+  const found = await onConn(
+    a,
+    async (conn) => {
+      const tmp = `__vals_${Date.now()}`;
+      // Distinct, normalised values per column (codes as text, trimmed, case-folded; at most 20k each).
+      const parts = cols.map(
+        (x, i) =>
+          `(SELECT ${i} AS k, v FROM (SELECT DISTINCT lower(trim(CAST(${q(x.c)} AS VARCHAR))) AS v FROM ${q(x.t)} WHERE ${q(x.c)} IS NOT NULL) WHERE length(v) > 0 AND v NOT IN ('0','-','na','n/a','nil','none','total') LIMIT 20000)`,
+      );
+      await conn.run(`CREATE OR REPLACE TEMP TABLE ${q(tmp)} AS ${parts.join(" UNION ALL ")}`);
+      const sizes = new Map((await conn.runAndReadAll(`SELECT k, count(*) FROM ${q(tmp)} GROUP BY k`)).getRows().map(([k, n]) => [Number(k), Number(n)]));
+      // Row numbers (1, 2, 3 … n) match every other list of row numbers: not a link.
+      const serial = new Set(
+        (
+          await conn.runAndReadAll(
+            `SELECT k FROM ${q(tmp)} GROUP BY k HAVING count(TRY_CAST(v AS BIGINT)) = count(*) AND min(TRY_CAST(v AS BIGINT)) BETWEEN 0 AND 1 AND max(TRY_CAST(v AS BIGINT)) - min(TRY_CAST(v AS BIGINT)) + 1 <= count(*) * 1.05`,
+          )
+        ).getRows().map(([k]) => Number(k)),
+      );
+      for (const k of serial) sizes.delete(k);
+      const pairs = (
+        await conn.runAndReadAll(`SELECT a.k, b.k, count(*) FROM ${q(tmp)} a JOIN ${q(tmp)} b ON a.v = b.v AND a.k < b.k GROUP BY 1, 2 HAVING count(*) >= 3`)
+      ).getRows().map(([x, y, n]) => [Number(x), Number(y), Number(n)] as const);
+      await conn.run(`DROP TABLE ${q(tmp)}`);
+      // Is each side unique (one row per value)?
+      const unique = async (t: string, c: string) => {
+        const r = (await conn.runAndReadAll(`SELECT count(${q(c)}) = count(DISTINCT ${q(c)}) FROM ${q(t)}`)).getRows()[0][0];
+        return r === true || r === "true";
+      };
+      const out: Link[] = [];
+      for (const [i, j, n] of pairs) {
+        const A = cols[i];
+        const B = cols[j];
+        if (A.t === B.t || serial.has(i) || serial.has(j)) continue;
+        const match = n / Math.min(sizes.get(i) ?? n, sizes.get(j) ?? n);
+        // Small code sets (1–5, Yes/No, shift letters) overlap by chance: need more evidence there.
+        const minShared = Math.min(sizes.get(i) ?? 0, sizes.get(j) ?? 0) < 10 ? 99999 : 5;
+        if (match < 0.6 || n < minShared) continue;
+        const [ua, ub] = [await unique(A.t, A.c), await unique(B.t, B.c)];
+        out.push({ id: randomUUID().slice(0, 8), from: { table: A.t, column: A.c }, to: { table: B.t, column: B.c }, match: +match.toFixed(3), shared: n, kind: ua && ub ? "1:1" : ua ? "1:n" : ub ? "n:1" : "n:n", by: "auto" });
+      }
+      return out;
+    },
+    120_000,
+  );
+  // Best link per table pair and column pair; drop ones people turned off.
+  const best = found
+    .filter((l) => !offKey.has([l.from.table, l.from.column, l.to.table, l.to.column].join("\u0001")))
+    .sort((x, y) => y.match * Math.log(1 + y.shared) - x.match * Math.log(1 + x.shared))
+    .slice(0, 150);
+  return [...kept, ...best];
+}
+
+/** The links, for the AI. */
+export function linksText(a: Analysis) {
+  const ls = (a.links ?? []).filter((l) => !l.off);
+  if (!ls.length) return "";
+  return ls
+    .slice(0, 60)
+    .map((l) => `- ${q(l.from.table)}.${q(l.from.column)} = ${q(l.to.table)}.${q(l.to.column)} (${l.kind}, ${Math.round(l.match * 100)}% of values match, ${l.shared} shared${l.by !== "auto" ? `, set by ${l.by}` : ""}${l.note ? `: ${l.note}` : ""})`)
+    .join("\n");
 }
