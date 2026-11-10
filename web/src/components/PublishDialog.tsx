@@ -82,6 +82,8 @@ export default function PublishDialog({
   const [phase, setPhase] = useState<"idle" | "running" | "live" | "blocked" | "error">("idle");
   const [step, setStep] = useState<string | null>(null);
   const [checks, setChecks] = useState<Checks | null>(null);
+  // What the publish did to the live app's data: database changes applied, records copied from Test.
+  const [dataNote, setDataNote] = useState<{ created: boolean; applied: number; failed: string[]; copied: { table: string; rows: number }[]; skipped: { table: string; reason: string }[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Why the last address change was refused, shown under the address box.
   const [addrError, setAddrError] = useState<string | null>(null);
@@ -187,6 +189,17 @@ export default function PublishDialog({
         if (ev.type === "step") setStep(ev.step);
         else if (ev.type === "published") {
           setChecks(ev.checks);
+          setDataNote(
+            ev.liveDb && (ev.liveDb.created || ev.liveDb.applied?.length || ev.liveDb.failed?.length || ev.records?.tables?.length || ev.records?.skipped?.length)
+              ? {
+                  created: !!ev.liveDb.created,
+                  applied: ev.liveDb.applied?.length ?? 0,
+                  failed: (ev.liveDb.failed ?? []).map((f: { error: string }) => f.error),
+                  copied: ev.records?.tables ?? [],
+                  skipped: ev.records?.skipped ?? [],
+                }
+              : null,
+          );
           setPhase("live");
         } else if (ev.type === "checks") {
           setChecks(ev.result);
@@ -235,9 +248,9 @@ export default function PublishDialog({
             <p className="text-[11px]" style={{ color: "var(--muted)" }}>
               {info?.published
                 ? info.upToDate
-                  ? "Your latest accepted version is live."
+                  ? "Your latest version is live."
                   : "You have changes that aren't published yet."
-                : "Put the accepted version of your app online."}
+                : "Put the latest version of your app online."}
             </p>
           </div>
           <button onClick={close} aria-label="Close" className="rounded-md p-1 hover:bg-black/[.05]">
@@ -302,6 +315,25 @@ export default function PublishDialog({
             >
               Copy a share message
             </button>
+            {dataNote && (
+              <div className="mt-3 rounded-lg border px-3 py-2 text-[11px]" style={{ color: "var(--muted)" }} aria-label="Live data">
+                <p className="font-medium" style={{ color: "var(--fg)" }}>Live data</p>
+                {dataNote.created && <p>The live app got its own database, a copy of the preview&apos;s data and accounts.</p>}
+                {dataNote.applied > 0 && <p>{dataNote.applied} database change{dataNote.applied > 1 ? "s" : ""} applied to the live app.</p>}
+                {dataNote.copied.length > 0 && (
+                  <p>
+                    Copied from the preview: {dataNote.copied.map((c) => `${c.rows} ${c.table === "auth_users" ? (c.rows > 1 ? "accounts" : "account") : `in ${c.table}`}`).join(", ")}.
+                    Records already on the live app were left as they are.
+                  </p>
+                )}
+                {dataNote.failed.map((f, i) => (
+                  <p key={i} className="text-red-600">A database change couldn&apos;t be applied to the live app: {f}</p>
+                ))}
+                {dataNote.skipped.map((s, i) => (
+                  <p key={i}>Not copied{s.table ? ` (${s.table})` : ""}: {s.reason}.</p>
+                ))}
+              </div>
+            )}
           </section>
         )}
 

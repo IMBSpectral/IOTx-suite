@@ -21,7 +21,7 @@ export const ARTICLES: Article[] = [
     title: "Drafts: review before changes go live",
     section: "Versions",
     keywords: "draft accept discard revert version history undo",
-    body: "Each build lands in a draft. Accept it to make it the current version, or discard it. History lists every version; restore any of them, bookmark important ones, and undo or redo the last change from the chat.",
+    body: "Each change goes straight into your working version, and the live site changes only when you publish. To review changes before they're kept, turn on drafts in Settings: then each build waits in a draft until you accept or discard it. History lists every version; restore any of them, bookmark important ones, and undo or redo the last change from the chat.",
   },
   {
     slug: "attachments",
