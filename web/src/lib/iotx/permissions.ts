@@ -167,7 +167,9 @@ function combine(
   for (const k of [...keys]) {
     if (!planOk(plan, k)) keys.delete(k);
   }
-  const open = (app: string) => !!manifestById(app)?.alwaysOpen || keys.has(openKey(app));
+  // Apps switched off on this server (IOTX_DISABLED_APPS, e.g. "insights") are closed for everyone, owners too.
+  for (const k of [...keys]) if (SERVER_OFF.has(appOfKey(k))) keys.delete(k);
+  const open = (app: string) => !SERVER_OFF.has(app) && (!!manifestById(app)?.alwaysOpen || keys.has(openKey(app)));
   for (const k of [...keys]) {
     if (!k.endsWith(".open") && !open(appOfKey(k))) keys.delete(k);
   }
@@ -278,6 +280,9 @@ export async function limit(userId: string, workspaceId: string, key: string): P
 export async function appsFor(userId: string, workspaceId: string) {
   return (await effectiveForRequest(userId, workspaceId))?.apps ?? [];
 }
+
+/** Apps this server doesn't offer at all, from IOTX_DISABLED_APPS (comma-separated app ids). */
+export const SERVER_OFF = new Set((process.env.IOTX_DISABLED_APPS ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean));
 
 const refusedAt = new Map<string, number>();
 
