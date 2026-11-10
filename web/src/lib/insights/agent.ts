@@ -11,7 +11,8 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { meteredFetch } from "../ai-meter";
 import { assertCredits, charge, creditsForUsage } from "../credits";
-import { links, profile, query, freeName, tableFromQuery, rowCount } from "./engine";
+import { discoverLinks, linksText, profile, query, freeName, tableFromQuery, rowCount } from "./engine";
+import { scan } from "./scan";
 import { readDoc } from "./ingest";
 import { compute, describe as describeModel, MODEL_KINDS } from "./compute";
 import { saveAnalysis, withLock, type Analysis, type Widget } from "./store";
@@ -32,7 +33,7 @@ export type AgentEvent =
 export const CHART_KINDS = [
   "kpi", "insight", "bar", "hbar", "stacked", "line", "area", "combo", "pie", "donut", "scatter", "bubble",
   "heatmap", "treemap", "sunburst", "funnel", "histogram", "boxplot", "sankey", "radar", "gauge", "calendar",
-  "waterfall", "pareto", "table", "forecast", "drivers", "whatif", "correlation",
+  "waterfall", "pareto", "table", "bullet", "forecast", "drivers", "whatif", "correlation", "network", "process", "anomalies",
 ] as const;
 
 const KIND_GUIDE = `Chart kinds and the columns each needs (x, y, series name columns your SQL returns):
@@ -55,12 +56,16 @@ const KIND_GUIDE = `Chart kinds and the columns each needs (x, y, series name co
 - waterfall: x step, y[0] change (positive or negative), in order. How a total builds up or what moved it.
 - pareto: x category, y[0] value sorted descending; shows the cumulative % line (the vital few).
 - table: any columns; for detail lists (top 20, exceptions).
+- bullet: x category, y[0] actual, y[1] target; horizontal bars with the target marked, coloured by whether each meets it. For actual vs plan, budget, quota or norm.
 
 Models (computed on the server from the query's rows, re-run when the board is filtered; try them with run_model first):
 - forecast: SQL returns one row per period (x = the period start date, y[0] = the value), ordered; aggregate to day, week or month first. options.horizon = periods ahead (default one season). Draws history, forecast and 80%/95% ranges, picking the method (steady, trend, damped trend, seasonal Holt-Winters, linear) that best predicted the most recent stretch of history. Say how accurate the backtest was.
 - drivers: SQL returns one row per record (order, employee, day…) with options.target (a number, or a yes/no column) and the candidate factors as other columns (or list them in options.features). Ranks factors by how much of the variation each explains on its own, with effects in the target's units (yes/no targets: percentage points). Leave out ids, names and columns that are part of the target (a total's own components); bucket dates into month or weekday first if useful. Associations, not proof of cause: say so when it matters.
 - whatif: the same inputs as drivers; shows a live calculator where people move each factor and see the predicted target. Add one after a drivers chart when people will want to test scenarios ("what if machining took 2 days less?").
-- correlation: SQL returns numeric columns (or list them in y); a matrix of correlations (-1 to 1). options.method 'spearman' for ranks (robust to outliers). For finding which measures move together.`;
+- correlation: SQL returns numeric columns (or list them in y); a matrix of correlations (-1 to 1). options.method 'spearman' for ranks (robust to outliers). For finding which measures move together.
+- network: a relationship graph. SQL returns one row per connection: x = from, series = to, y[0] = strength (optional; count or amount). options.sourceType / targetType name the two kinds of node (e.g. "Welder", "Contractor") so they get different colours. The app finds clusters (groups that work together) and connectors (nodes on the most paths between others: key people, single points of failure). Good for people × teams, suppliers × parts, customers × products, who-reports-to-whom, co-occurrence (two things in the same order/shift). Keep it readable: at most ~300 links; filter to the strongest.
+- process: a process map from an event log. SQL returns one row per event: x = case id (order, ticket, employee…), series = step name, options.time = the column with when it happened (date or timestamp). Shows the flow between steps, how long each hand-over takes and where cases wait longest (bottlenecks, in red), plus the most common paths. Wide data with one date column per stage (Ordered date, Cut date, Shipped date…) must be unpivoted into events in SQL first (UNION ALL of one SELECT per stage).
+- anomalies: SQL returns x (a label or date), y[0] the value, optional series to judge each group against its own normal range. Flags values far from typical (robust score ≥ options.threshold, default 3.5) and lists them. For catching data errors, fraud, breakdowns and exceptional days.`;
 
 const SYSTEM = `You are the analyst inside Insights, a data analysis app. People bring spreadsheets, CSVs, Word, PDF and PowerPoint files; you read all of it, find what matters and build a live, interactive board of charts with plain-English findings, then discuss it with them.
 
@@ -78,7 +83,8 @@ How you work
 - Statistics are welcome when they help: correlation (corr), regression slope (regr_slope, regr_r2), percentiles, growth rates, moving averages (window functions), shares of total, z-scores for outliers. Explain them in plain words.
 - Talk like a sharp, friendly analyst: short paragraphs, the key numbers, what to do about it. No jargon without explaining it. Don't list the tool calls you made.
 - End each reply with suggest_next: 3–5 specific follow-up questions this data can answer.
-- When the data has just been added and there's no board yet: give it a short descriptive name (rename), build a first board (3–5 KPIs, 2–4 insight cards, 4–8 charts), summarise the most important findings in a few sentences, then ask what decisions they want to make with it so you can go deeper.
+- When the data has just been added and there's no board yet: give it a short descriptive name (rename), then build a rich first board with add_charts (several items per call): 3–5 KPIs, 3–5 finding cards, and 8–14 charts that cover the data from different angles: rankings, composition, trends, distributions, relationships between measures, and, wherever the data has them, a network of how things connect (people, teams, suppliers, products), a process map for step-by-step records, anomalies, and a forecast or drivers chart. Start from the "Notable facts" scan, check each before using it. Summarise the most important findings in a few sentences, then ask what decisions they want to make so you can go deeper.
+- Use the data map ("How tables link"): join tables on those columns to combine sheets (for example attendance with the salary sheet by employee code). If you find a link that's missing or wrong, fix it with set_link, because links also make board filters reach every linked sheet.
 - When asked to change the board (remove, resize, change a chart type), do it with the tools; you can see each chart's id in the board list.
 
 ${KIND_GUIDE}`;
@@ -120,6 +126,25 @@ export async function runAgent(a: Analysis, userId: string, text: string, on: (e
       }
     }
     return `Chart data (${r.rows.length} rows${r.truncated ? ", more cut off" : ""}):\n${preview(r)}`;
+  };
+
+  /** Check one item against the data and put it on the board; the result tells the AI what it shows. */
+  const addOne = async (w: Omit<Widget, "id">, after?: string) => {
+    const widget = { id: randomUUID().slice(0, 8), ...w, size: w.size ?? (w.kind === "kpi" ? 3 : w.kind === "insight" ? 6 : ["network", "process"].includes(w.kind) ? 12 : 6) } as Widget;
+    let check: string;
+    try {
+      check = await checkChart(widget);
+    } catch (e) {
+      return `Not added. SQL error: ${(e as Error).message}`;
+    }
+    if (check.startsWith("The query") || check.startsWith("This chart")) return `Not added. ${check}`;
+    const at = after ? a.board.findIndex((x) => x.id === after) : -1;
+    if (at >= 0) a.board.splice(at + 1, 0, widget);
+    else a.board.push(widget);
+    on({ type: "board", board: a.board });
+    note(`Added ${widget.kind === "kpi" ? "KPI" : widget.kind === "insight" ? "finding" : "chart"}: ${widget.title}`);
+    await save();
+    return `Added [${widget.id}]. ${check}`;
   };
 
   const chartShape = {
@@ -229,6 +254,8 @@ export async function runAgent(a: Analysis, userId: string, text: string, on: (e
           } else return "Give sql, or columns and rows.";
           const n = await rowCount(a, t);
           a.tables = [...a.tables.filter((x) => x.name !== t), { name: t, source: source || (sql ? "made from a query" : "made from a document"), rows: n, columns: cols, derived: true }];
+          a.dataVersion = (a.dataVersion ?? 0) + 1;
+          a.links = await discoverLinks(a).catch(() => a.links ?? []);
           on({ type: "tables", tables: a.tables });
           note(`Made table ${t}`);
           await save();
@@ -242,22 +269,59 @@ export async function runAgent(a: Analysis, userId: string, text: string, on: (e
       name: "add_chart",
       description: "Add a chart, KPI, insight card or table to the board (after: id of the chart to place it after; leave out for the end). Returns the data it shows, so check it.",
       inputSchema: z.object({ ...chartShape, after: z.string().optional() }),
-      run: async ({ after, ...w }) => {
-        const widget: Widget = { id: randomUUID().slice(0, 8), ...w, size: w.size ?? (w.kind === "kpi" ? 3 : w.kind === "insight" ? 6 : 6) } as Widget;
-        let check: string;
-        try {
-          check = await checkChart(widget);
-        } catch (e) {
-          return `Not added. SQL error: ${(e as Error).message}`;
-        }
-        if (check.startsWith("The query") || check.startsWith("This chart")) return `Not added. ${check}`;
-        const at = after ? a.board.findIndex((x) => x.id === after) : -1;
-        if (at >= 0) a.board.splice(at + 1, 0, widget);
-        else a.board.push(widget);
-        on({ type: "board", board: a.board });
-        note(`Added ${widget.kind === "kpi" ? "KPI" : widget.kind === "insight" ? "finding" : "chart"}: ${widget.title}`);
+      run: async ({ after, ...w }) => addOne(w as Omit<Widget, "id">, after),
+    }),
+    betaZodTool({
+      name: "add_charts",
+      description:
+        "Add several board items in one go (up to 12), in order: faster than one call each. Each is checked like add_chart; items that fail are reported and the rest are still added.",
+      inputSchema: z.object({ items: z.array(z.object(chartShape)).min(1).max(12) }),
+      run: async ({ items }) => {
+        const out: string[] = [];
+        for (const [i, w] of items.entries()) out.push(`${i + 1}. ${w.title}: ${await addOne(w as Omit<Widget, "id">)}`);
+        return out.join("\n\n");
+      },
+    }),
+    betaZodTool({
+      name: "set_link",
+      description:
+        "Fix the data map: link two columns that hold the same values (e.g. salary sheet 'Emp. Code' = attendance 'PayCode'), or turn off a wrong link (off: true). Links drive joins and make board filters reach linked tables.",
+      inputSchema: z.object({
+        from_table: z.string(),
+        from_column: z.string(),
+        to_table: z.string(),
+        to_column: z.string(),
+        off: z.boolean().optional(),
+        note: z.string().max(200).optional(),
+      }),
+      run: async ({ from_table, from_column, to_table, to_column, off, note: why }) => {
+        const has = (t: string, c: string) => a.tables.some((x) => x.name === t && x.columns.some((y) => y.name === c));
+        if (!has(from_table, from_column) || !has(to_table, to_column)) return "One of those columns doesn't exist; check the table and column names.";
+        const same = (l: { from: { table: string; column: string }; to: { table: string; column: string } }) =>
+          (l.from.table === from_table && l.from.column === from_column && l.to.table === to_table && l.to.column === to_column) ||
+          (l.to.table === from_table && l.to.column === from_column && l.from.table === to_table && l.from.column === to_column);
+        const old = (a.links ?? []).find(same);
+        const r = await query(
+          a,
+          `SELECT count(DISTINCT x.v) FROM (SELECT lower(trim(CAST("${from_column.replace(/"/g, '""')}" AS VARCHAR))) v FROM "${from_table.replace(/"/g, '""')}") x JOIN (SELECT lower(trim(CAST("${to_column.replace(/"/g, '""')}" AS VARCHAR))) v FROM "${to_table.replace(/"/g, '""')}") y USING (v)`,
+          { limit: 1 },
+        ).catch(() => null);
+        const shared = Number(r?.rows[0]?.[0] ?? 0);
+        const link = {
+          id: old?.id ?? randomUUID().slice(0, 8),
+          from: { table: from_table, column: from_column },
+          to: { table: to_table, column: to_column },
+          match: old?.match ?? 0,
+          shared,
+          kind: old?.kind ?? ("n:n" as const),
+          by: "ai" as const,
+          off: !!off,
+          note: why,
+        };
+        a.links = [...(a.links ?? []).filter((l) => !same(l)), link];
+        note(off ? `Removed link ${from_table}.${from_column} ↔ ${to_table}.${to_column}` : `Linked ${from_table}.${from_column} ↔ ${to_table}.${to_column}`);
         await save();
-        return `Added [${widget.id}]. ${check}`;
+        return off ? "Link turned off." : `Linked (${shared} shared values).`;
       },
     }),
     betaZodTool({
@@ -333,14 +397,25 @@ export async function runAgent(a: Analysis, userId: string, text: string, on: (e
 
   // What the AI knows going in: every table profiled (small ones whole), how they link, documents, the board.
   step("Reading the data");
-  const prof = a.tables.length ? await profile(a, { sampleRows: a.tables.length > 8 ? 3 : 8, wholeUnder: 60, budget: 70_000 }) : "No tables yet.";
-  const joins = a.tables.length > 1 ? await links(a) : "";
+  // The profile and the scan only change with the data: reuse them across turns (much faster, fewer tokens).
+  const version = a.dataVersion ?? 0;
+  if (a.cache?.version !== version) a.cache = { version };
+  const cache = a.cache!;
+  if (cache.profile === undefined) cache.profile = a.tables.length ? await profile(a, { sampleRows: a.tables.length > 8 ? 3 : 8, wholeUnder: 60, budget: 70_000 }) : "No tables yet.";
+  if (cache.scan === undefined && a.tables.length) {
+    step("Scanning for what stands out");
+    cache.scan = await scan(a).catch(() => "");
+  }
+  if (a.tables.length > 1 && !a.links) a.links = await discoverLinks(a).catch(() => []);
+  const prof = cache.profile;
+  const joins = linksText(a);
   const docs = a.sources.filter((s) => s.textChars).map((s) => `- [${s.id}] ${s.name}: ${s.kind}, ${s.textChars!.toLocaleString()} characters of text${s.tables.length ? `, tables: ${s.tables.join(", ")}` : ""}`);
   const context = [
     `# Analysis: ${a.name}`,
     `## Files\n${a.sources.map((s) => `- ${s.name} (${s.kind}${s.tables.length ? `; tables: ${s.tables.map((t) => `"${t}"`).join(", ")}` : ""}${s.note ? `; ${s.note}` : ""})`).join("\n") || "None yet."}`,
     `## Tables\n${prof}`,
-    joins ? `## How tables link\n${joins}` : "",
+    joins ? `## How tables link (data map: columns holding the same values)\n${joins}` : "",
+    cache.scan ? `## Notable facts (an automatic scan; verify before stating)\n${cache.scan}` : "",
     docs.length ? `## Documents to read with read_document\n${docs.join("\n")}` : "",
     `## Board now\n${boardText(a.board)}`,
   ]

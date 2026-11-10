@@ -5,7 +5,7 @@
 import type { EChartsOption } from "echarts";
 
 export type Col = { name: string; type: string };
-export type Data = { columns: Col[]; rows: unknown[][] };
+export type Data = { columns: Col[]; rows: unknown[][]; meta?: Record<string, unknown> };
 export type Widget = {
   id: string;
   kind: string;
@@ -293,6 +293,209 @@ export function buildOption(w: Widget, d: Data, t: Theme): EChartsOption {
           label: { show: names.length <= 9, color: "#fff", textBorderColor: "rgba(15,23,42,.55)", textBorderWidth: 2, fontSize: 11, fontWeight: 600, formatter: (p: { value: number[] }) => p.value[2].toFixed(2) },
           itemStyle: { borderColor: t.panel, borderWidth: 2, borderRadius: 4 },
         },
+      ],
+    } as EChartsOption;
+  }
+
+  // ---- Network: who/what connects to what -------------------------------------------------
+  if (kind === "network") {
+    const edges = ((d.meta?.edges as [string, string, number][]) ?? []).slice(0, 3000);
+    const nodes = d.rows.map((r) => ({ id: String(r[0]), type: String(r[1] ?? ""), w: Number(r[2]) || 0, deg: Number(r[3]) || 0, bc: Number(r[4]) || 0, cl: Number(r[5]) || 1 }));
+    const maxW = Math.max(1, ...nodes.map((n) => n.w));
+    const maxE = Math.max(1, ...edges.map((e) => e[2]));
+    const types = uniq(nodes.map((n) => n.type).filter(Boolean));
+    const clusters = uniq(nodes.map((n) => n.cl)).sort((a, b) => a - b);
+    const labelled = new Set([...nodes].sort((a, b) => b.w - a.w).slice(0, 30).map((n) => n.id).concat([...nodes].sort((a, b) => b.bc - a.bc).slice(0, 8).map((n) => n.id)));
+    const topBc = [...nodes].sort((a, b) => b.bc - a.bc)[0]?.bc || 1;
+    const shapes = ["circle", "roundRect", "diamond", "triangle"];
+    const weightName = String(d.meta?.weightName ?? "Links");
+    return {
+      ...base,
+      legend: { type: "scroll", top: 0, textStyle: { color: t.muted, fontSize: 11 }, data: clusters.map((c) => `Cluster ${c}`) },
+      tooltip: {
+        ...tooltipBase,
+        formatter: (p: unknown) => {
+          const x = p as { dataType: string; data: { name?: string; source?: string; target?: string; value?: number; info?: (typeof nodes)[number] } };
+          if (x.dataType === "edge") return `${x.data.source} — ${x.data.target}<br/><b>${fmt(x.data.value, w, true)}</b>`;
+          const n = x.data.info!;
+          return `<b>${n.id}</b>${n.type ? ` · ${n.type}` : ""}<br/>${weightName}: ${fmt(n.w, w, true)}<br/>${n.deg} connections · cluster ${n.cl}${n.bc >= topBc * 0.3 && n.bc > 0 ? `<br/><span style="color:#f59e0b">Connector: on many paths between others</span>` : ""}`;
+        },
+        valueFormatter: undefined,
+      },
+      series: [
+        {
+          type: "graph",
+          layout: "force",
+          roam: true,
+          draggable: true,
+          top: 30,
+          categories: clusters.map((c) => ({ name: `Cluster ${c}` })),
+          force: { repulsion: nodes.length > 150 ? 60 : nodes.length > 60 ? 120 : 220, edgeLength: [30, 140], gravity: 0.08, friction: 0.15 },
+          emphasis: { focus: "adjacency", lineStyle: { width: 4 } },
+          labelLayout: { hideOverlap: true },
+          lineStyle: { color: "source", opacity: 0.35, curveness: 0.12 },
+          data: nodes.map((n) => ({
+            id: n.id,
+            name: n.id,
+            info: n,
+            category: clusters.indexOf(n.cl),
+            symbol: types.length > 1 ? shapes[types.indexOf(n.type) % shapes.length] : "circle",
+            symbolSize: 8 + 40 * Math.sqrt(n.w / maxW),
+            value: n.w,
+            itemStyle: n.bc >= topBc * 0.3 && n.bc > 0 ? { borderColor: "#f59e0b", borderWidth: 3, shadowBlur: 10, shadowColor: "rgba(245,158,11,.5)" } : { borderColor: t.panel, borderWidth: 1.5 },
+            label: { show: labelled.has(n.id), position: "right", color: t.ink, fontSize: 11, textBorderColor: t.panel, textBorderWidth: 2 },
+          })),
+          links: edges.map(([s, tg, v]) => ({ source: s, target: tg, value: v, lineStyle: { width: 0.6 + 5 * (v / maxE) } })),
+        },
+      ],
+    } as EChartsOption;
+  }
+
+  // ---- Process map: steps left to right, hand-overs coloured by how long they wait ------------
+  if (kind === "process") {
+    type PM = { steps: { name: string; cases: number; position: number; avgStay: number | null }[]; unit: string; starts: Record<string, number>; ends: Record<string, number> };
+    const pm = d.meta?.process as PM | undefined;
+    const trans = d.rows.map((r) => ({ from: String(r[0]), to: String(r[1]), cases: Number(r[2]), avg: Number(r[3]), med: Number(r[4]), total: Number(r[5]) }));
+    const steps = pm?.steps ?? uniq(trans.flatMap((x) => [x.from, x.to])).map((name, i, all) => ({ name, cases: 0, position: i / Math.max(1, all.length - 1), avgStay: null }));
+    const maxC = Math.max(1, ...trans.map((x) => x.cases));
+    const avgs = trans.map((x) => x.avg).sort((a, b) => a - b);
+    const p50 = avgs[Math.floor(avgs.length * 0.5)] ?? 0;
+    const p85 = avgs[Math.floor(avgs.length * 0.85)] ?? 0;
+    const color = (v: number) => (v >= p85 && v > p50 ? "#ef4444" : v > p50 ? "#f59e0b" : "#10b981");
+    // Columns by average position; steps sharing a column stack vertically.
+    const cols = new Map<number, string[]>();
+    for (const s of steps) {
+      const c = Math.round(s.position * 8);
+      cols.set(c, [...(cols.get(c) ?? []), s.name]);
+    }
+    const maxCases = Math.max(1, ...steps.map((s) => s.cases));
+    // The main path runs along the middle; side steps (rework, exceptions: under half the cases) sit below it.
+    const pos = new Map<string, [number, number]>();
+    let side = 0;
+    for (const [c, names] of cols) {
+      const main = names.filter((n) => (steps.find((s) => s.name === n)?.cases ?? 0) >= maxCases * 0.5);
+      main.forEach((n, i) => pos.set(n, [c * 140, (i - (main.length - 1) / 2) * 90]));
+      names.filter((n) => !main.includes(n)).forEach((n) => pos.set(n, [c * 140, 130 + (side++ % 2) * 70]));
+    }
+    const unit = pm?.unit ?? "";
+    return {
+      ...base,
+      tooltip: {
+        ...tooltipBase,
+        formatter: (p: unknown) => {
+          const x = p as { dataType: string; data: { name?: string; info?: (typeof trans)[number]; step?: (typeof steps)[number] } };
+          if (x.dataType === "edge" && x.data.info) {
+            const e = x.data.info;
+            return `${e.from} → ${e.to}<br/><b>${e.cases}</b> cases<br/>Average wait <b>${fmt(e.avg)} ${unit}</b> (median ${fmt(e.med)})<br/>Total ${fmt(e.total)} ${unit}`;
+          }
+          const s = x.data.step!;
+          return `<b>${s.name}</b><br/>${s.cases} cases${pm?.starts[s.name] ? `<br/>Starts here: ${pm.starts[s.name]}` : ""}${pm?.ends[s.name] ? `<br/>Ends here: ${pm.ends[s.name]}` : ""}`;
+        },
+        valueFormatter: undefined,
+      },
+      series: [
+        {
+          type: "graph",
+          layout: "none",
+          roam: true,
+          top: 30,
+          bottom: 30,
+          left: 60,
+          right: 60,
+          edgeSymbol: ["none", "arrow"],
+          edgeSymbolSize: 9,
+          // Node and arrow sizes stay fixed when zooming; the frame below keeps one row of steps from stretching.
+          nodeScaleRatio: 0,
+          emphasis: { focus: "adjacency" },
+          data: [
+            // Invisible corners: give the layout height, so a single row of steps keeps its shape.
+            ...[-1, 1].map((k) => ({ name: `__frame${k}`, x: 0, y: k * 160, symbolSize: 0, label: { show: false }, tooltip: { show: false }, silent: true, itemStyle: { opacity: 0 } })),
+            ...steps.map((s) => ({
+            name: s.name,
+            step: s,
+            x: pos.get(s.name)?.[0] ?? 0,
+            y: pos.get(s.name)?.[1] ?? 0,
+            symbol: "roundRect",
+            symbolSize: [Math.max(70, Math.min(150, s.name.length * 7 + 20)), 34 + 14 * Math.sqrt(s.cases / maxCases)],
+            itemStyle: { color: t.dark ? "#1e1b4b" : "#eef2ff", borderColor: t.accent, borderWidth: 1.5 },
+            label: { show: true, color: t.ink, fontSize: 11, fontWeight: 600, formatter: `{b}\n${s.cases || ""}` },
+          })),
+          ],
+          links: trans.map((e) => ({
+            source: e.from,
+            target: e.to,
+            info: e,
+            lineStyle: { width: 1 + 7 * (e.cases / maxC), color: color(e.avg), opacity: 0.8, curveness: e.from === e.to ? 0.6 : trans.some((o) => o.from === e.to && o.to === e.from) ? 0.25 : 0.08 },
+            label: { show: e.cases >= maxC * 0.15, formatter: `${fmt(e.avg)} ${unit === "days" ? "d" : unit === "hours" ? "h" : ""}`, color: color(e.avg), fontSize: 10, fontWeight: 600 },
+          })),
+        },
+      ],
+    } as EChartsOption;
+  }
+
+  // ---- Anomalies: the values, with unusual ones flagged ----------------------------------------
+  if (kind === "anomalies") {
+    const xs = d.rows.map((r) => label(r[0]));
+    const dl = dateLabeler(xs);
+    const grouped = !!d.meta?.grouped;
+    const flagged = d.rows.map((r, i) => (r[5] === true ? [i, Number(r[2])] : null)).filter(Boolean) as [number, number][];
+    return {
+      ...base,
+      ...grid(28),
+      legend: { top: 0, textStyle: { color: t.muted, fontSize: 11 }, data: [d.columns[2].name, "Unusual", ...(grouped ? [] : ["Typical"])] },
+      tooltip: {
+        ...tooltipBase,
+        trigger: "item",
+        formatter: (p: unknown) => {
+          const i = Array.isArray((p as { value: unknown }).value) ? Number(((p as { value: unknown[] }).value)[0]) : (p as { dataIndex: number }).dataIndex;
+          const r = d.rows[i];
+          return `${dl(label(r[0]))}${r[1] ? ` · ${r[1]}` : ""}<br/><b>${fmt(r[2], w, true)}</b><br/>Typical ${fmt(r[3], w, true)} · score ${r[4]}${r[5] ? `<br/><span style="color:#ef4444">Unusual</span>` : ""}`;
+        },
+        valueFormatter: undefined,
+      },
+      xAxis: { type: "category", data: xs, axisLabel: { ...axisText, formatter: (v: string) => dl(v), hideOverlap: true }, axisTick: { show: false }, axisLine: { lineStyle: { color: t.line } } },
+      yAxis: { type: "value", scale: true, axisLabel: { ...axisText, formatter: (v: number) => fmt(v, w) }, splitLine: split },
+      dataZoom: xs.length > 60 ? [{ type: "inside" }, { type: "slider", height: 18, bottom: 0, borderColor: "transparent", textStyle: axisText }] : undefined,
+      series: [
+        d.meta?.dated || xs.length > 40
+          ? { name: d.columns[2].name, type: "line", data: d.rows.map((r) => num(r[2])), showSymbol: false, lineStyle: { width: 1.5, color: t.muted }, itemStyle: { color: t.muted } }
+          : { name: d.columns[2].name, type: "bar", data: d.rows.map((r) => num(r[2])), barMaxWidth: 26, itemStyle: { color: t.dark ? "#334155" : "#cbd5e1", borderRadius: [4, 4, 0, 0] } },
+        ...(grouped ? [] : [{ name: "Typical", type: "line" as const, data: d.rows.map((r) => num(r[3])), symbol: "none", lineStyle: { type: "dashed" as const, color: t.accent, width: 1.5 }, itemStyle: { color: t.accent } }]),
+        { name: "Unusual", type: "scatter", data: flagged, symbolSize: 13, itemStyle: { color: "#ef4444", borderColor: t.panel, borderWidth: 2 }, z: 5 },
+      ],
+    } as EChartsOption;
+  }
+
+  // ---- Bullet: actual against target -----------------------------------------------------------
+  if (kind === "bullet") {
+    const ai = idx(d, w.y?.[0]);
+    const ti = idx(d, w.y?.[1]);
+    const rows = [...d.rows].reverse();
+    const lower = o.lowerIsBetter === true;
+    return {
+      ...base,
+      grid: { left: 8, right: 56, top: 26, bottom: 8, containLabel: true },
+      legend: { top: 0, textStyle: { color: t.muted, fontSize: 11 }, data: [w.y?.[0] ?? "Actual", w.y?.[1] ?? "Target"] },
+      tooltip: { ...tooltipBase, trigger: "axis", axisPointer: { type: "shadow" } },
+      xAxis: { type: "value", axisLabel: { ...axisText, formatter: (v: number) => fmt(v, w) }, splitLine: split },
+      yAxis: { type: "category", data: rows.map((r) => label(r[xi])), axisLabel: { ...axisText, width: 140, overflow: "truncate" }, axisTick: { show: false } },
+      series: [
+        {
+          name: w.y?.[0] ?? "Actual",
+          type: "bar",
+          barMaxWidth: 20,
+          data: rows.map((r) => {
+            const v = num(r[ai]) ?? 0;
+            const tg = num(r[ti]) ?? 0;
+            const ok = lower ? v <= tg : v >= tg;
+            return { value: v, itemStyle: { color: ok ? "#10b981" : "#ef4444", borderRadius: [0, 5, 5, 0] } };
+          }),
+          label: { show: true, position: "right", color: t.muted, fontSize: 11, formatter: (p: { value: unknown; dataIndex: number }) => {
+            const tg = num(rows[p.dataIndex][ti]);
+            return tg ? `${Math.round((Number(p.value) / tg) * 100)}%` : "";
+          } },
+        },
+        { name: w.y?.[1] ?? "Target", type: "scatter", symbol: "rect", symbolSize: [4, 26], data: rows.map((r) => num(r[ti])), itemStyle: { color: t.ink }, z: 5 },
       ],
     } as EChartsOption;
   }
@@ -693,6 +896,9 @@ export function chartHeight(w: Widget, data?: Data | null) {
     return Math.max(300, Math.min(640, 46 * n + 80));
   }
   if (w.kind === "forecast") return 340;
+  if (w.kind === "network") return Math.max(420, Math.min(700, 300 + 2 * (data?.rows.length ?? 50)));
+  if (w.kind === "process") return 420;
+  if (w.kind === "bullet") return Math.max(200, Math.min(560, 34 * (data?.rows.length ?? 6) + 40));
   if (w.kind === "sankey" || w.kind === "treemap" || w.kind === "sunburst" || w.kind === "heatmap") return 360;
   return 300;
 }

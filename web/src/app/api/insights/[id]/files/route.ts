@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import { analysisFor, insightsRoute } from "@/lib/insights/http";
 import { addFile } from "@/lib/insights/ingest";
 import { docFile, InsightsError, saveAnalysis, sourceFile, withLock } from "@/lib/insights/store";
-import { dropTable } from "@/lib/insights/engine";
+import { discoverLinks, dropTable } from "@/lib/insights/engine";
 
 type Ctx = { params: Promise<{ id: string }> };
 export const maxDuration = 300;
@@ -27,6 +27,10 @@ export const POST = insightsRoute(async (req: Request, { params }: Ctx) => {
         errors.push(e instanceof InsightsError ? e.message : `${f.name} couldn't be read.`);
       }
     }
+    if (added.length) {
+      a.dataVersion = (a.dataVersion ?? 0) + 1;
+      a.links = await discoverLinks(a).catch((e) => (console.error("[insights] links", e), a.links ?? []));
+    }
     return saveAnalysis(a);
   });
   return Response.json({ analysis: a, added, errors });
@@ -43,6 +47,8 @@ export const DELETE = insightsRoute(async (req: Request, { params }: Ctx) => {
     for (const t of s.tables) await dropTable(a, t);
     a.tables = a.tables.filter((t) => !s.tables.includes(t.name));
     a.sources = a.sources.filter((x) => x.id !== sid);
+    a.links = (a.links ?? []).filter((l) => !s.tables.includes(l.from.table) && !s.tables.includes(l.to.table));
+    a.dataVersion = (a.dataVersion ?? 0) + 1;
     await fs.rm(sourceFile(a, s), { force: true });
     await fs.rm(docFile(a, s.id), { force: true });
     return saveAnalysis(a);

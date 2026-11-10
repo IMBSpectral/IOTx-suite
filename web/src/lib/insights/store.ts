@@ -71,6 +71,22 @@ export type ChatMsg = {
   questions?: string[];
 };
 
+/** How two tables connect: a column in one holds the same values as a column in the other. */
+export type Link = {
+  id: string;
+  from: { table: string; column: string };
+  to: { table: string; column: string };
+  /** Share of the smaller side's distinct values found on the other side (0–1). */
+  match: number;
+  shared: number;
+  /** 1:1, 1:n (one "from" row to many "to" rows), n:1, n:n. */
+  kind: "1:1" | "1:n" | "n:1" | "n:n";
+  by: "auto" | "user" | "ai";
+  /** Turned off by a person: kept so it isn't suggested again. */
+  off?: boolean;
+  note?: string;
+};
+
 export type Analysis = {
   id: string;
   workspaceId: string;
@@ -84,6 +100,12 @@ export type Analysis = {
   chat: ChatMsg[];
   /** Questions the AI suggests next. */
   questions?: string[];
+  /** How the tables connect (found automatically, or set by people or the AI). */
+  links?: Link[];
+  /** Bumped whenever tables change, so cached profiles are rebuilt. */
+  dataVersion?: number;
+  /** What the AI reads about the data, kept until the data changes (saves time and tokens). */
+  cache?: { version: number; profile?: string; scan?: string };
 };
 
 const safe = (s: string) => s.replace(/[^\w-]/g, "");

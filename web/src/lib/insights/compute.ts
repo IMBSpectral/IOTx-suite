@@ -5,9 +5,10 @@
  */
 import { correlations, drivers, forecast, type DriverModel } from "./stats";
 import type { Result } from "./engine";
+import { anomalies, network, processMap, type ProcessMap } from "./graph";
 import type { Widget } from "./store";
 
-export const MODEL_KINDS = new Set(["forecast", "drivers", "whatif", "correlation"]);
+export const MODEL_KINDS = new Set(["forecast", "drivers", "whatif", "correlation", "network", "process", "anomalies"]);
 
 export type Computed = Result & { meta?: Record<string, unknown> };
 
@@ -80,6 +81,75 @@ export function compute(w: Widget, r: Result): Computed {
       meta: { method, columns: cols },
     };
   }
+
+  const col = (name?: string) => (name ? r.columns.findIndex((c) => c.name === name) : -1);
+  const str = (v: unknown) => (v === null || v === undefined ? "" : String(v).trim());
+
+  if (w.kind === "network") {
+    const si = col(w.x) >= 0 ? col(w.x) : 0;
+    const ti = col(w.series) >= 0 ? col(w.series) : 1;
+    const wi = col(w.y?.[0]);
+    if (ti < 0 || ti >= r.columns.length) throw new Error("A network needs x (from) and series (to) columns.");
+    const st = opt(w, "sourceType") ? String(opt(w, "sourceType")) : undefined;
+    const tt = opt(w, "targetType") ? String(opt(w, "targetType")) : undefined;
+    const net = network(r.rows.map((row) => ({ s: str(row[si]), t: str(row[ti]), w: wi >= 0 ? Number(row[wi]) || 0 : 1, st, tt })));
+    return {
+      columns: [
+        { name: "Node", type: "VARCHAR" },
+        { name: "Type", type: "VARCHAR" },
+        { name: wi >= 0 ? r.columns[wi].name : "Links", type: "DOUBLE" },
+        { name: "Connections", type: "BIGINT" },
+        { name: "Betweenness", type: "DOUBLE" },
+        { name: "Cluster", type: "BIGINT" },
+      ],
+      rows: net.nodes.map((n) => [n.id, n.type ?? "", n.weight, n.degree, n.betweenness, n.cluster + 1]),
+      meta: { edges: net.edges.slice(0, 3000), clusters: net.clusters, weightName: wi >= 0 ? r.columns[wi].name : "Links" },
+    };
+  }
+
+  if (w.kind === "process") {
+    const ci = col(w.x) >= 0 ? col(w.x) : 0;
+    const ai = col(w.series) >= 0 ? col(w.series) : 1;
+    const ti = col(String(opt(w, "time") ?? w.y?.[0] ?? "")) >= 0 ? col(String(opt(w, "time") ?? w.y?.[0])) : 2;
+    if (ti >= r.columns.length) throw new Error("A process map needs x (case id), series (step) and options.time (when the step happened).");
+    const pm = processMap(r.rows.map((row) => ({ c: str(row[ci]), a: str(row[ai]), t: row[ti] })));
+    if (!pm.transitions.length) throw new Error("No case has two or more steps with times: check the case, step and time columns.");
+    return {
+      columns: [
+        { name: "From", type: "VARCHAR" },
+        { name: "To", type: "VARCHAR" },
+        { name: "Cases", type: "BIGINT" },
+        { name: `Average wait (${pm.unit})`, type: "DOUBLE" },
+        { name: `Median wait (${pm.unit})`, type: "DOUBLE" },
+        { name: `Total wait (${pm.unit})`, type: "DOUBLE" },
+      ],
+      rows: pm.transitions.map((t) => [t.from, t.to, t.cases, t.avg, t.median, t.total]),
+      meta: { process: pm },
+    };
+  }
+
+  if (w.kind === "anomalies") {
+    const xi = col(w.x) >= 0 ? col(w.x) : 0;
+    const vi = col(w.y?.[0]) >= 0 ? col(w.y?.[0]) : r.columns.findIndex((c, i) => i !== xi && NUMERIC.test(c.type));
+    if (vi < 0) throw new Error("Anomalies need a number column (y).");
+    const gi = col(w.series);
+    const pts = anomalies(
+      r.rows.map((row) => ({ x: str(row[xi]), g: gi >= 0 ? str(row[gi]) : "", v: Number(row[vi]) })),
+      Number(opt(w, "threshold")) || 3.5,
+    );
+    return {
+      columns: [
+        { name: r.columns[xi].name, type: r.columns[xi].type },
+        { name: gi >= 0 ? r.columns[gi].name : "Group", type: "VARCHAR" },
+        { name: r.columns[vi].name, type: "DOUBLE" },
+        { name: "Typical", type: "DOUBLE" },
+        { name: "Score", type: "DOUBLE" },
+        { name: "Unusual", type: "BOOLEAN" },
+      ],
+      rows: pts.map((p) => [p.x, p.g, p.v, p.median, p.z, p.flag]),
+      meta: { count: pts.filter((p) => p.flag).length, grouped: gi >= 0, dated: /DATE|TIME/i.test(r.columns[xi].type) },
+    };
+  }
   return r;
 }
 
@@ -127,6 +197,36 @@ export function describe(w: Widget, c: Computed) {
   if (w.kind === "correlation") {
     const strong = c.rows.filter((r) => String(r[0]) < String(r[1])).sort((a, b) => Math.abs(Number(b[2])) - Math.abs(Number(a[2]))).slice(0, 12);
     return `Strongest correlations:\n${strong.map((r) => `${r[0]} ~ ${r[1]}: ${r[2]} (n=${r[3]})`).join("\n")}`;
+  }
+  if (w.kind === "network") {
+    const m = c.meta as { clusters: number; edges: unknown[]; weightName: string };
+    const byW = c.rows.slice(0, 10).map((r) => `${r[0]}${r[1] ? ` (${r[1]})` : ""}: ${f2(Number(r[2]))} ${m.weightName}, ${r[3]} connections, cluster ${r[5]}`);
+    const byB = [...c.rows].sort((a, b) => Number(b[4]) - Number(a[4])).slice(0, 8).map((r) => `${r[0]}: betweenness ${Number(r[4]).toFixed(3)}, ${r[3]} connections`);
+    const sizes = new Map<number, string[]>();
+    for (const r of c.rows) sizes.set(Number(r[5]), [...(sizes.get(Number(r[5])) ?? []), String(r[0])]);
+    return [
+      `Network: ${c.rows.length} nodes, ${m.edges.length} links, ${m.clusters} clusters.`,
+      `Heaviest nodes:\n${byW.join("\n")}`,
+      `Connectors (on the most paths between others; losing them splits the network):\n${byB.join("\n")}`,
+      `Clusters:\n${[...sizes.entries()].slice(0, 8).map(([k, v]) => `${k}: ${v.length} nodes, e.g. ${v.slice(0, 6).join(", ")}`).join("\n")}`,
+    ].join("\n");
+  }
+  if (w.kind === "process") {
+    const pm = (c.meta as { process: ProcessMap }).process;
+    return [
+      `Process: ${pm.cases} cases, ${pm.steps.length} steps; average case ${pm.avgCase} ${pm.unit} (median ${pm.medianCase}).`,
+      `Steps in order: ${pm.steps.map((s) => `${s.name} (${s.cases} cases${s.avgStay !== null ? `, then waits ${s.avgStay} ${pm.unit}` : ""})`).join(" → ")}`,
+      `Where the time goes (total wait by hand-over, biggest first = bottlenecks):\n${pm.transitions.slice(0, 10).map((t) => `${t.from} → ${t.to}: ${t.cases} cases, avg ${t.avg}, median ${t.median}, total ${t.total} ${pm.unit}`).join("\n")}`,
+      `Most common paths:\n${pm.variants.slice(0, 5).map((v) => `${v.cases} cases (avg ${v.avg} ${pm.unit}): ${v.path.join(" → ")}`).join("\n")}`,
+      `Starts: ${JSON.stringify(pm.starts)}; ends: ${JSON.stringify(pm.ends)}`,
+    ].join("\n");
+  }
+  if (w.kind === "anomalies") {
+    const flagged = c.rows.filter((r) => r[5] === true).sort((a, b) => Math.abs(Number(b[4])) - Math.abs(Number(a[4])));
+    return `${flagged.length} unusual values out of ${c.rows.length} (robust score ≥ ${Number(w.options?.threshold) || 3.5}):\n${flagged
+      .slice(0, 25)
+      .map((r) => `${r[0]}${r[1] ? ` [${r[1]}]` : ""}: ${f2(Number(r[2]))} vs typical ${f2(Number(r[3]))} (score ${r[4]})`)
+      .join("\n")}`;
   }
   return "";
 }
