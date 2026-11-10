@@ -58,3 +58,4 @@ docs/FEATURE-CHECKLIST.md
 # The Accounts app (apps/tally) has its own repository for now
 apps/tally/
 web/.freeze/
+.ship/
