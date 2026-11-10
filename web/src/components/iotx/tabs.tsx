@@ -99,6 +99,7 @@ const ROUTES: [RegExp, string][] = [
   [/^\/(dashboard|projects|assistant|chats|files|automations|help|rewards|vault|templates)(\/|$)/, "builder"],
   [/^\/docs(\/|$)/, "docs"],
   [/^\/sheets(\/|$)/, "sheets"],
+  [/^\/insights(\/|$)/, "insights"],
   [/^\/slides(\/|$)/, "slides"],
   [/^\/mail(\/|$)/, "mail"],
   [/^\/drive(\/|$)/, "files"],

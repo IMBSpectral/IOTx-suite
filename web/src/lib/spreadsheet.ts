@@ -105,7 +105,7 @@ export function workbookText(wb: Workbook) {
 const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
 
 /** The row most likely to be the column headings: among the first rows, the one with the most text cells. */
-function headerRow(rows: string[][]) {
+export function headerRow(rows: string[][]) {
   let best = 0;
   let score = -1;
   for (let i = 0; i < Math.min(rows.length, 12); i++) {

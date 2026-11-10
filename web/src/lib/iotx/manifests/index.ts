@@ -18,9 +18,10 @@ import { read } from "./read";
 import { admin } from "./admin";
 import { teamchat } from "./teamchat";
 import { spaces } from "./spaces";
+import { insights } from "./insights";
 
 /** Every IOTx app, in launcher order. To add an app: write its manifest and list it here. */
-export const MANIFESTS: AppManifest[] = [home, builder, docs, sheets, slides, tally, chat, teamchat, mail, tasks, files, calendar, meetings, notes, store, read, admin, spaces].sort(
+export const MANIFESTS: AppManifest[] = [home, builder, docs, sheets, slides, tally, chat, teamchat, mail, tasks, files, calendar, meetings, notes, store, read, admin, spaces, insights].sort(
   (a, b) => a.order - b.order,
 );
 
@@ -30,7 +31,7 @@ export const manifestById = (id: string) => MANIFESTS.find((m) => m.id === id);
  * Apps listed in the shell's sidebar (in this order), when the person can open them.
  * Shared with apps/workspace through GET /api/iotx/shell so both sidebars match.
  */
-export const SIDEBAR_APPS = ["builder", "chat", "teamchat", "meetings", "calendar", "tasks", "sheets", "docs", "slides", "read", "tally", "files"];
+export const SIDEBAR_APPS = ["builder", "chat", "teamchat", "meetings", "calendar", "tasks", "sheets", "insights", "docs", "slides", "read", "tally", "files"];
 
 /** Live apps served by apps/workspace (another process under /workspace): plain links, not client-side routes. */
 export const isWorkspaceHref = (href: string) => href === "/workspace" || href.startsWith("/workspace/");
