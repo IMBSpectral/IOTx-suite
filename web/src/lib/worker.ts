@@ -15,7 +15,7 @@ import { emit, forget, resetEvents } from "./events";
 import { enforceInvariants } from "./invariants";
 import { createDraft, checkoutDraft } from "./drafts";
 import { repoDir } from "./paths";
-import { commit } from "./repo";
+import { commit, stageAll } from "./repo";
 import { charge, creditsForUsage, freeBuildHour } from "./credits";
 import type { Attachment } from "./uploads";
 import { matchSkill, skillInstruction } from "./skills";
@@ -249,6 +249,12 @@ async function runBuild(buildId: string) {
     await db.build.update({ where: { id: buildId }, data: { draftId } });
     await emit(buildId, { type: "draft_opened", draftId, name: d.name });
   }
+  // Anything in the working tree that was never committed (a command that edited files, an
+  // install that changed package.json) would be wiped by the checkout: save it first, on the
+  // branch it was made on.
+  if (draftId && (await stageAll(projectId).catch(() => 0)) > 0) {
+    await commit(projectId, "Saved changes that hadn't been recorded").catch(() => undefined);
+  }
   if (draftId) await checkoutDraft(projectId, draftId);
 
   // Proof of life for the recovery sweep. Cleared in `finally` so a dead
@@ -372,6 +378,11 @@ async function runBuild(buildId: string) {
 
       await emit(buildId, ev);
     }
+
+    // Changes made by commands (scripts, installs) as well as by the file tools: all of them are
+    // part of this version. Before, only write_file changes were committed and the rest vanished
+    // at the next checkout (lost features, "removed 9 packages", Nov 2026).
+    if (!readOnly && (await stageAll(projectId).catch(() => 0)) > 0 && !touched.some((t) => t.startsWith("write:"))) touched.push("write:(changes made by commands)");
 
     // Structural guarantees the model cannot be trusted to preserve. A
     // missing stylesheet import compiles cleanly and renders an unstyled

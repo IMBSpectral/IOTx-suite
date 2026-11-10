@@ -126,6 +126,66 @@ export async function listFiles(projectId: string): Promise<string[]> {
   return git.listFiles({ fs, dir, ref: "HEAD" }).catch(() => [] as string[]);
 }
 
+/** Files in a version (a commit), without touching the working tree. */
+export async function listFilesAt(projectId: string, ref: string): Promise<string[]> {
+  return git.listFiles({ fs, dir: repoDir(projectId), ref }).catch(() => [] as string[]);
+}
+
+/** A file's text as it is in a version, without touching the working tree. */
+export async function readFileAt(projectId: string, ref: string, filePath: string): Promise<string> {
+  const dir = repoDir(projectId);
+  const oid = await git.resolveRef({ fs, dir, ref }).catch(() => ref);
+  const { blob } = await git.readBlob({ fs, dir, oid, filepath: safeRelPath(filePath) });
+  return Buffer.from(blob).toString("utf8");
+}
+
+/**
+ * Write a version's files into `dest` (a separate folder), leaving the working tree — where
+ * the agent is editing and the live preview runs — alone. Builds and checks of the accepted
+ * version (main) run there, so they never switch branches under a build in progress.
+ */
+export async function exportTree(projectId: string, ref: string, dest: string) {
+  const dir = repoDir(projectId);
+  const oid = await git.resolveRef({ fs, dir, ref }).catch(() => ref);
+  const files = await git.listFiles({ fs, dir, ref: oid });
+  const tmp = `${dest}.part-${process.pid}-${Date.now()}`;
+  await fs.rm(tmp, { recursive: true, force: true });
+  for (const f of files) {
+    const { blob } = await git.readBlob({ fs, dir, oid, filepath: f });
+    const abs = path.join(tmp, f);
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, blob);
+  }
+  await fs.rm(dest, { recursive: true, force: true });
+  await fs.rename(tmp, dest);
+  return files.length;
+}
+
+/**
+ * Stage every change in the working tree: edits made by commands (scripts, installs) as well
+ * as by the agent's file tools. Without this, anything not written through write_file was never
+ * committed and vanished at the next checkout. Ignored paths (.gitignore, build output, the
+ * agent's scratch folder) are left out.
+ */
+export async function stageAll(projectId: string) {
+  const dir = repoDir(projectId);
+  const SKIP = /^(node_modules|\.builds|\.snapshots|tmp|\.cache|dist)(\/|$)/;
+  const matrix = await git.statusMatrix({ fs, dir, filter: (f) => !SKIP.test(f) }).catch(() => [] as [string, number, number, number][]);
+  let n = 0;
+  for (const [file, head, work, stage] of matrix) {
+    if (head === work && work === stage) continue;
+    if (work === 0) {
+      await git.remove({ fs, dir, filepath: file });
+      n++;
+    } else if (work !== stage || head !== work) {
+      if (work === 2 && stage === 2 && head === 1) continue;
+      await git.add({ fs, dir, filepath: file });
+      n++;
+    }
+  }
+  return n;
+}
+
 export async function readFile(projectId: string, filePath: string): Promise<string> {
   const rel = safeRelPath(filePath);
   return fs.readFile(path.join(repoDir(projectId), rel), "utf8");

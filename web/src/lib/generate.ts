@@ -13,6 +13,7 @@ import {
   deleteFile,
   safeRelPath,
   checkpoint,
+  stageAll,
 } from "./repo";
 import {
   editImage,
@@ -1981,10 +1982,13 @@ function recordCalls<
       let c: string | undefined;
       try {
         out = await run(...args);
-        if (!READ_ONLY_TOOLS.has(tool.name))
+        if (!READ_ONLY_TOOLS.has(tool.name)) {
+          // Include what commands changed, so the checkpoint (and the version) has it too.
+          if (tool.name === "run_command") await stageAll(projectId).catch(() => 0);
           c = await checkpoint(projectId, `After ${tool.name}`).catch(
             () => undefined,
           );
+        }
         return out;
       } catch (e) {
         failed = true;
