@@ -6,9 +6,10 @@ import remarkGfm from "remark-gfm";
 import type { ECharts } from "echarts";
 import {
   AlertTriangle, ArrowDown, ArrowUp, BarChart3, ChevronLeft, Database, Download, Eye, FileSpreadsheet, FileText, Filter, GripVertical, Lightbulb,
-  Loader2, Maximize2, MessageSquare, MoreHorizontal, Plus, Search, Send, Sparkles, Table2, Trash2, TrendingDown, TrendingUp, Upload, X,
+  Loader2, Maximize2, MessageSquare, MoreHorizontal, Network, Plus, Search, Send, Sparkles, Table2, Trash2, TrendingDown, TrendingUp, Upload, X,
 } from "lucide-react";
 import Chart from "./Chart";
+import DataMap, { type MapLink } from "./DataMap";
 import { chartHeight, fmt, isIdName, isNumType, label, type Data, type Widget } from "./chart-options";
 import "./insights.css";
 
@@ -16,7 +17,7 @@ type Col = { name: string; type: string };
 type Table = { name: string; source: string; part?: string; rows: number; columns: Col[]; title?: string; derived?: boolean };
 type Source = { id: string; name: string; size: number; kind: string; at: string; tables: string[]; textChars?: number; note?: string };
 type ChatMsg = { role: "user" | "assistant"; text: string; at: string; steps?: string[]; questions?: string[] };
-type Analysis = { id: string; name: string; updatedAt: string; sources: Source[]; tables: Table[]; board: Widget[]; chat: ChatMsg[]; questions?: string[] };
+type Analysis = { id: string; name: string; updatedAt: string; sources: Source[]; tables: Table[]; board: Widget[]; chat: ChatMsg[]; questions?: string[]; links?: MapLink[] };
 type Summary = { id: string; name: string; updatedAt: string; sources: number; tables: number; widgets: number };
 type Filter = { column: string; table?: string; values?: string[]; label?: string };
 type Result = (Data & { meta?: Record<string, unknown> }) | { error: string };
@@ -193,7 +194,7 @@ function DropZone({ onFiles, busy, big }: { onFiles: (f: File[]) => void; busy?:
 type Live = { text: string; thought: string; steps: string[]; busy: boolean };
 
 function Workspace({ a, setA, onBack, autoStart, clearAutoStart }: { a: Analysis; setA: (a: Analysis) => void; onBack: () => void; autoStart: string | null; clearAutoStart: () => void }) {
-  const [tab, setTab] = useState<"board" | "data" | "files">("board");
+  const [tab, setTab] = useState<"board" | "data" | "map" | "files">("board");
   const [filters, setFilters] = useState<Filter[]>([]);
   const [results, setResults] = useState<Record<string, Result>>({});
   const [loading, setLoading] = useState(false);
@@ -401,6 +402,7 @@ function Workspace({ a, setA, onBack, autoStart, clearAutoStart }: { a: Analysis
               [
                 ["board", "Board", BarChart3],
                 ["data", "Data", Table2],
+                ["map", "Map", Network],
                 ["files", "Files", FileText],
               ] as const
             ).map(([id, name, Icon]) => (
@@ -465,6 +467,7 @@ function Workspace({ a, setA, onBack, autoStart, clearAutoStart }: { a: Analysis
             />
           )}
           {tab === "data" && <DataView a={a} filters={filters} />}
+          {tab === "map" && <DataMap tables={a.tables} links={a.links ?? []} onLink={(link) => patch({ link }).catch((e) => setNotice(e.message))} />}
           {tab === "files" && (
             <FilesView
               a={a}
@@ -730,7 +733,7 @@ function Card({
       ) : w.kind === "whatif" ? (
         <WhatIf w={w} model={(data.meta as { model?: DriverModel } | undefined)?.model} />
       ) : (
-        <Chart w={w} data={data} height={h} onPick={MODEL_KINDS.has(w.kind) ? undefined : onPick} chartRef={(c) => (chart.current = c)} />
+        <Chart w={w} data={data} height={h} onPick={MODEL_KINDS.has(w.kind) && !["network", "anomalies"].includes(w.kind) ? undefined : onPick} chartRef={(c) => (chart.current = c)} />
       )}
       {data && <ModelNote w={w} data={data} />}
       {w.insight && (
@@ -743,7 +746,7 @@ function Card({
   );
 }
 
-const MODEL_KINDS = new Set(["forecast", "drivers", "whatif", "correlation"]);
+const MODEL_KINDS = new Set(["forecast", "drivers", "whatif", "correlation", "network", "process", "anomalies"]);
 
 type DriverModel = {
   target: string;
@@ -795,6 +798,61 @@ function ModelNote({ w, data }: { w: Widget; data: Data & { meta?: Record<string
             ))}
           </div>
         )}
+      </div>
+    );
+  }
+  if (w.kind === "network") {
+    const meta = m as { clusters?: number; edges?: unknown[] };
+    const top = [...data.rows].sort((a, b) => Number(b[4]) - Number(a[4])).slice(0, 3).filter((r) => Number(r[4]) > 0);
+    return (
+      <div className="ins-model col">
+        <div>
+          <Network size={12} /> {data.rows.length} nodes · {meta.edges?.length ?? 0} links · <b>{meta.clusters ?? 1}</b> cluster{meta.clusters === 1 ? "" : "s"}. Drag to rearrange, scroll to zoom, hover a node to light up its connections.
+        </div>
+        {top.length > 0 && (
+          <div className="ins-combos">
+            <b>Key connectors (outlined): on the most paths between others</b>
+            {top.map((r) => (
+              <span key={String(r[0])} className="ins-combo up">
+                {String(r[0])}: {String(r[3])} connections, cluster {String(r[5])}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+  if (w.kind === "process") {
+    const pm = (m as { process?: { cases: number; avgCase: number; medianCase: number; unit: string; variants: { path: string[]; cases: number }[] } }).process;
+    if (!pm) return null;
+    const worst = data.rows[0];
+    return (
+      <div className="ins-model col">
+        <div>
+          <Sparkles size={12} /> {pm.cases.toLocaleString()} cases · average {pm.avgCase} {pm.unit} end to end (median {pm.medianCase}). Line thickness = cases, colour = wait: <span style={{ color: "#10b981" }}>quick</span>, <span style={{ color: "#f59e0b" }}>slower</span>,{" "}
+          <span style={{ color: "#ef4444" }}>slowest</span>.
+        </div>
+        {worst && (
+          <div className="ins-combos">
+            <b>Biggest bottleneck</b>
+            <span className="ins-combo up">
+              {String(worst[0])} → {String(worst[1])}: {fmt(worst[3])} {pm.unit} average wait over {String(worst[2])} cases ({fmt(worst[5])} {pm.unit} in total)
+            </span>
+            {pm.variants[0] && (
+              <span className="ins-combo down">
+                Most common path ({pm.variants[0].cases} cases): {pm.variants[0].path.join(" → ")}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+  if (w.kind === "anomalies") {
+    const n = Number((m as { count?: number }).count ?? 0);
+    return (
+      <div className="ins-model">
+        <AlertTriangle size={12} /> <b>{n}</b> unusual value{n === 1 ? "" : "s"} out of {data.rows.length}, judged against {(m as { grouped?: boolean }).grouped ? "each group's" : "the"} typical range (robust to the outliers themselves).
       </div>
     );
   }
