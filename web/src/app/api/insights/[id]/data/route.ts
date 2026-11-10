@@ -1,5 +1,6 @@
 import { analysisFor, insightsRoute } from "@/lib/insights/http";
 import { query, type Filter } from "@/lib/insights/engine";
+import { compute, MODEL_KINDS } from "@/lib/insights/compute";
 
 type Ctx = { params: Promise<{ id: string }> };
 const q = (n: string) => `"${n.replace(/"/g, '""')}"`;
@@ -44,7 +45,9 @@ export const POST = insightsRoute(async (req: Request, { params }: Ctx) => {
     if (want && !want.has(w.id)) continue;
     if (!w.sql) continue;
     try {
-      results[w.id] = await query(a, w.sql, { limit: 5000, filters });
+      const model = MODEL_KINDS.has(w.kind);
+      const r = await query(a, w.sql, { limit: model ? 50_000 : 5000, filters });
+      results[w.id] = model && r.rows.length ? compute(w, r) : r;
     } catch (e) {
       results[w.id] = { error: (e as Error).message };
     }

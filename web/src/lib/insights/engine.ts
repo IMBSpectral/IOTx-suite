@@ -14,7 +14,11 @@ import path from "node:path";
 import { analysisDir, dbFile, InsightsError, type Analysis, type Table } from "./store";
 
 type Handle = { inst: DuckDBInstance; conn: DuckDBConnection; used: number; queue: Promise<unknown> };
-const open = new Map<string, Handle>();
+// One cache for the whole server process: Next can load this module once per route, and two
+// DuckDB instances on one file conflict (Windows refuses the second; elsewhere they would diverge).
+const G = globalThis as unknown as { __insightsDuck?: Map<string, Handle>; __insightsOpening?: Map<string, Promise<Handle>> };
+const open = (G.__insightsDuck ??= new Map<string, Handle>());
+const opening = (G.__insightsOpening ??= new Map<string, Promise<Handle>>());
 const MAX_OPEN = 4;
 
 const q = (name: string) => `"${name.replace(/"/g, '""')}"`;
@@ -28,22 +32,33 @@ async function handle(a: Pick<Analysis, "workspaceId" | "id">): Promise<Handle> 
     h.used = Date.now();
     return h;
   }
-  if (open.size >= MAX_OPEN) {
-    const oldest = [...open.entries()].sort((x, y) => x[1].used - y[1].used)[0];
-    open.delete(oldest[0]);
-    await oldest[1].queue.catch(() => {});
-    oldest[1].conn.closeSync();
-    oldest[1].inst.closeSync();
+  // Requests arriving together share one opening of the file.
+  const pending = opening.get(key);
+  if (pending) return pending;
+  const p = (async () => {
+    if (open.size >= MAX_OPEN) {
+      const oldest = [...open.entries()].sort((x, y) => x[1].used - y[1].used)[0];
+      open.delete(oldest[0]);
+      await oldest[1].queue.catch(() => {});
+      oldest[1].conn.closeSync();
+      oldest[1].inst.closeSync();
+    }
+    await fs.mkdir(analysisDir(a.workspaceId, a.id), { recursive: true });
+    const inst = await DuckDBInstance.create(dbFile(a), { memory_limit: "768MB", threads: "2" });
+    const conn = await inst.connect();
+    await conn.run(`SET allowed_directories=[${lit(slash(analysisDir(a.workspaceId, a.id)))}]`);
+    await conn.run("SET enable_external_access=false");
+    await conn.run("SET lock_configuration=true");
+    const made: Handle = { inst, conn, used: Date.now(), queue: Promise.resolve() };
+    open.set(key, made);
+    return made;
+  })();
+  opening.set(key, p);
+  try {
+    return await p;
+  } finally {
+    opening.delete(key);
   }
-  await fs.mkdir(analysisDir(a.workspaceId, a.id), { recursive: true });
-  const inst = await DuckDBInstance.create(dbFile(a), { memory_limit: "768MB", threads: "2" });
-  const conn = await inst.connect();
-  await conn.run(`SET allowed_directories=[${lit(slash(analysisDir(a.workspaceId, a.id)))}]`);
-  await conn.run("SET enable_external_access=false");
-  await conn.run("SET lock_configuration=true");
-  const made: Handle = { inst, conn, used: Date.now(), queue: Promise.resolve() };
-  open.set(key, made);
-  return made;
 }
 
 /** Run on the analysis's connection, one statement at a time. */

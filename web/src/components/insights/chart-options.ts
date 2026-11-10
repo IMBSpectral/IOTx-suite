@@ -184,6 +184,119 @@ export function buildOption(w: Widget, d: Data, t: Theme): EChartsOption {
     } as EChartsOption;
   }
 
+  // ---- Forecast: history, forecast and 80% / 95% ranges ----------------------------------
+  if (kind === "forecast") {
+    const cats = d.rows.map((r) => label(r[0]));
+    const col = (i: number) => d.rows.map((r) => num(r[i]));
+    const [act, fc, lo80, hi80, lo95, hi95] = [1, 2, 3, 4, 5, 6].map(col);
+    const diff = (hi: (number | null)[], lo: (number | null)[]) => hi.map((h, i) => (h === null || lo[i] === null ? null : h - lo[i]!));
+    const dl = dateLabeler(cats);
+    const firstFc = d.rows.findIndex((r) => r[1] === null);
+    const band = (name: string, lo: (number | null)[], width: (number | null)[], opacity: number, stack: string) => [
+      { name: `${name} low`, type: "line" as const, data: lo, stack, lineStyle: { opacity: 0 }, symbol: "none", silent: true, tooltip: { show: false } },
+      { name, type: "line" as const, data: width, stack, lineStyle: { opacity: 0 }, symbol: "none", itemStyle: { color: t.accent, opacity: opacity * 3 }, areaStyle: { color: t.accent, opacity }, silent: true, tooltip: { show: false } },
+    ];
+    return {
+      ...base,
+      legend: { top: 0, textStyle: { color: t.muted, fontSize: 11 }, data: [d.columns[1].name, "Forecast", "80% range", "95% range"], icon: "roundRect", itemWidth: 10, itemHeight: 10 },
+      grid: { left: 8, right: 16, top: 30, bottom: cats.length > 30 ? 30 : 8, containLabel: true },
+      tooltip: {
+        ...tooltipBase,
+        trigger: "axis",
+        formatter: (ps: unknown) => {
+          const i = (ps as { dataIndex: number }[])[0]?.dataIndex ?? 0;
+          const r = d.rows[i];
+          const v = (k: number) => fmt(r[k], w, true);
+          return r[1] !== null
+            ? `${dl(String(r[0]))}<br/><b>${v(1)}</b>`
+            : `${dl(String(r[0]))} (forecast)<br/><b>${v(2)}</b><br/><span style="opacity:.7">80%: ${v(3)} – ${v(4)}<br/>95%: ${v(5)} – ${v(6)}</span>`;
+        },
+      },
+      xAxis: { type: "category", data: cats, boundaryGap: false, axisLabel: { ...axisText, formatter: (v: string) => dl(v), hideOverlap: true }, axisLine: { lineStyle: { color: t.line } }, axisTick: { show: false } },
+      yAxis: { type: "value", scale: true, axisLabel: { ...axisText, formatter: (v: number) => fmt(v, w) }, splitLine: split },
+      dataZoom: cats.length > 30 ? [{ type: "inside" }, { type: "slider", height: 18, bottom: 0, borderColor: "transparent", textStyle: axisText }] : undefined,
+      series: [
+        ...band("95% range", lo95, diff(hi95, lo95), 0.1, "b95"),
+        ...band("80% range", lo80, diff(hi80, lo80), 0.18, "b80"),
+        {
+          name: d.columns[1].name,
+          type: "line",
+          data: act,
+          symbolSize: 5,
+          showSymbol: cats.length <= 40,
+          lineStyle: { width: 2.5, color: t.ink },
+          itemStyle: { color: t.ink },
+          markLine: firstFc > 0 ? { symbol: "none", silent: true, label: { formatter: "Forecast →", color: t.muted, position: "insideEndTop" }, lineStyle: { color: t.muted, type: "dashed" }, data: [{ xAxis: firstFc - 1 }] } : undefined,
+        },
+        { name: "Forecast", type: "line", data: fc, symbolSize: 5, showSymbol: cats.length <= 40, lineStyle: { width: 2.5, type: "dashed", color: t.accent }, itemStyle: { color: t.accent } },
+      ],
+    } as EChartsOption;
+  }
+
+  // ---- Key drivers: importance of each factor ----------------------------------------------
+  if (kind === "drivers") {
+    const rows = [...d.rows].reverse();
+    return {
+      ...base,
+      grid: { left: 8, right: 48, top: 8, bottom: 8, containLabel: true },
+      tooltip: { ...tooltipBase, trigger: "axis", axisPointer: { type: "shadow" }, formatter: (ps: unknown) => {
+        const i = (ps as { dataIndex: number }[])[0]?.dataIndex ?? 0;
+        const r = rows[i];
+        return `<b>${r[0]}</b>: ${(Number(r[1]) * 100).toFixed(1)}% of what the model explains<br/><span style="opacity:.75">${r[2]}</span>`;
+      } },
+      xAxis: { type: "value", max: 1, axisLabel: { ...axisText, formatter: (v: number) => `${Math.round(v * 100)}%` }, splitLine: split },
+      yAxis: { type: "category", data: rows.map((r) => String(r[0])), axisLabel: { ...axisText, width: 150, overflow: "truncate" }, axisTick: { show: false }, axisLine: { show: false } },
+      series: [
+        {
+          type: "bar",
+          data: rows.map((r, i) => ({ value: Number(r[1]), itemStyle: { color: PALETTE[(rows.length - 1 - i) % PALETTE.length] } })),
+          barMaxWidth: 26,
+          itemStyle: { borderRadius: [0, 6, 6, 0] },
+          label: { show: true, position: "right", color: t.muted, fontSize: 11, formatter: (p: { value: unknown }) => `${(Number(p.value) * 100).toFixed(0)}%` },
+          showBackground: true,
+          backgroundStyle: { color: t.dark ? "rgba(255,255,255,.03)" : "rgba(15,23,42,.03)", borderRadius: [0, 6, 6, 0] },
+        },
+      ],
+    } as EChartsOption;
+  }
+
+  // ---- Correlation matrix --------------------------------------------------------------------
+  if (kind === "correlation") {
+    const names = uniq(d.rows.map((r) => String(r[0])));
+    return {
+      ...base,
+      grid: { left: 8, right: 8, top: 8, bottom: 44, containLabel: true },
+      tooltip: { ...tooltipBase, formatter: (p: unknown) => {
+        const { value } = p as { value: [number, number, number, number] };
+        const r = value[2];
+        const s = Math.abs(r) >= 0.7 ? "strong" : Math.abs(r) >= 0.4 ? "moderate" : Math.abs(r) >= 0.2 ? "weak" : "no real";
+        return `${names[value[0]]} × ${names[value[1]]}<br/><b>${r.toFixed(2)}</b>: ${s} ${r >= 0 ? "positive" : "negative"} link<br/><span style="opacity:.7">${value[3]} rows</span>`;
+      } },
+      xAxis: { type: "category", data: names, axisLabel: { ...axisText, rotate: names.length > 5 ? 35 : 0, width: 100, overflow: "truncate", interval: 0 }, axisTick: { show: false } },
+      yAxis: { type: "category", data: names, inverse: true, axisLabel: { ...axisText, width: 120, overflow: "truncate", interval: 0 }, axisTick: { show: false } },
+      visualMap: {
+        min: -1,
+        max: 1,
+        calculable: true,
+        orient: "horizontal",
+        left: "center",
+        bottom: 0,
+        itemHeight: 140,
+        itemWidth: 10,
+        textStyle: axisText,
+        inRange: { color: ["#ef4444", t.dark ? "#1f2937" : "#f8fafc", "#6366f1"] },
+      },
+      series: [
+        {
+          type: "heatmap",
+          data: d.rows.map((r) => [names.indexOf(String(r[0])), names.indexOf(String(r[1])), Number(r[2]), Number(r[3])]),
+          label: { show: names.length <= 9, color: "#fff", textBorderColor: "rgba(15,23,42,.55)", textBorderWidth: 2, fontSize: 11, fontWeight: 600, formatter: (p: { value: number[] }) => p.value[2].toFixed(2) },
+          itemStyle: { borderColor: t.panel, borderWidth: 2, borderRadius: 4 },
+        },
+      ],
+    } as EChartsOption;
+  }
+
   // ---- Pareto: sorted bars + cumulative share line ------------------------------------
   if (kind === "pareto") {
     const yi = idx(d, ys[0]);
@@ -574,6 +687,12 @@ export function chartHeight(w: Widget, data?: Data | null) {
   }
   if (w.kind === "hbar") return Math.max(240, Math.min(620, 28 * (data?.rows.length ?? 8) + 40));
   if (w.kind === "gauge") return 220;
+  if (w.kind === "drivers") return Math.max(200, Math.min(520, 34 * (data?.rows.length ?? 6) + 30));
+  if (w.kind === "correlation") {
+    const n = data ? new Set(data.rows.map((r) => r[0])).size : 6;
+    return Math.max(300, Math.min(640, 46 * n + 80));
+  }
+  if (w.kind === "forecast") return 340;
   if (w.kind === "sankey" || w.kind === "treemap" || w.kind === "sunburst" || w.kind === "heatmap") return 360;
   return 300;
 }
