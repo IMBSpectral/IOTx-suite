@@ -128,7 +128,23 @@ async function readMeta(workspaceId: string, id: string): Promise<Analysis> {
 /** The analysis, if it's this person's. */
 export async function getAnalysis(workspaceId: string, userId: string, id: string) {
   const a = await readMeta(workspaceId, id).catch(() => null);
-  if (!a || a.ownerId !== userId) throw new InsightsError("Not found", 404);
+  if (!a) {
+    // Made in another workspace? Say so, rather than "not found".
+    const all = await fs.readdir(path.dirname(wsDir(workspaceId))).catch(() => [] as string[]);
+    for (const ws of all) {
+      if (ws === safe(workspaceId)) continue;
+      const other = await readMeta(ws, id).catch(() => null);
+      if (other)
+        throw new InsightsError(
+          other.ownerId === userId
+            ? "This analysis is in another of your workspaces. Switch to that workspace (top-left menu in the suite) and open it again."
+            : "This analysis belongs to someone else. For now an analysis can only be opened by the person who made it, signed in to the same workspace.",
+          404,
+        );
+    }
+    throw new InsightsError("This analysis doesn't exist (it may have been deleted).", 404);
+  }
+  if (a.ownerId !== userId) throw new InsightsError("This analysis belongs to someone else. For now an analysis can only be opened by the person who made it, signed in to the same workspace.", 404);
   return a;
 }
 
