@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: "Insights" };
 export default async function StandaloneInsights({ searchParams }: { searchParams: Promise<{ a?: string }> }) {
   const { a } = await searchParams;
   const session = await auth();
-  if (!session?.user?.id) redirect(`/login?redirect=${encodeURIComponent(`/analytics${a ? `?a=${a}` : ""}`)}`);
+  if (!session?.user?.id) redirect(`/analytics/login?redirect=${encodeURIComponent(`/analytics${a ? `?a=${a}` : ""}`)}`);
   const ws = await currentWorkspace(session.user.id).catch(() => null);
   if (!ws) redirect("/welcome");
   if (!(await appsFor(session.user.id, ws.id)).includes("insights")) redirect("/home");
