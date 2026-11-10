@@ -13,6 +13,7 @@ import { meteredFetch } from "../ai-meter";
 import { assertCredits, charge, creditsForUsage } from "../credits";
 import { links, profile, query, freeName, tableFromQuery, rowCount } from "./engine";
 import { readDoc } from "./ingest";
+import { compute, describe as describeModel, MODEL_KINDS } from "./compute";
 import { saveAnalysis, withLock, type Analysis, type Widget } from "./store";
 
 const MODEL = process.env.INSIGHTS_MODEL?.trim() || "claude-opus-5-5";
@@ -31,7 +32,7 @@ export type AgentEvent =
 export const CHART_KINDS = [
   "kpi", "insight", "bar", "hbar", "stacked", "line", "area", "combo", "pie", "donut", "scatter", "bubble",
   "heatmap", "treemap", "sunburst", "funnel", "histogram", "boxplot", "sankey", "radar", "gauge", "calendar",
-  "waterfall", "pareto", "table",
+  "waterfall", "pareto", "table", "forecast", "drivers", "whatif", "correlation",
 ] as const;
 
 const KIND_GUIDE = `Chart kinds and the columns each needs (x, y, series name columns your SQL returns):
@@ -53,7 +54,13 @@ const KIND_GUIDE = `Chart kinds and the columns each needs (x, y, series name co
 - calendar: x date, y[0] value. Daily patterns over a year.
 - waterfall: x step, y[0] change (positive or negative), in order. How a total builds up or what moved it.
 - pareto: x category, y[0] value sorted descending; shows the cumulative % line (the vital few).
-- table: any columns; for detail lists (top 20, exceptions).`;
+- table: any columns; for detail lists (top 20, exceptions).
+
+Models (computed on the server from the query's rows, re-run when the board is filtered; try them with run_model first):
+- forecast: SQL returns one row per period (x = the period start date, y[0] = the value), ordered; aggregate to day, week or month first. options.horizon = periods ahead (default one season). Draws history, forecast and 80%/95% ranges, picking the method (steady, trend, damped trend, seasonal Holt-Winters, linear) that best predicted the most recent stretch of history. Say how accurate the backtest was.
+- drivers: SQL returns one row per record (order, employee, day…) with options.target (a number, or a yes/no column) and the candidate factors as other columns (or list them in options.features). Ranks factors by how much of the variation each explains on its own, with effects in the target's units (yes/no targets: percentage points). Leave out ids, names and columns that are part of the target (a total's own components); bucket dates into month or weekday first if useful. Associations, not proof of cause: say so when it matters.
+- whatif: the same inputs as drivers; shows a live calculator where people move each factor and see the predicted target. Add one after a drivers chart when people will want to test scenarios ("what if machining took 2 days less?").
+- correlation: SQL returns numeric columns (or list them in y); a matrix of correlations (-1 to 1). options.method 'spearman' for ranks (robust to outliers). For finding which measures move together.`;
 
 const SYSTEM = `You are the analyst inside Insights, a data analysis app. People bring spreadsheets, CSVs, Word, PDF and PowerPoint files; you read all of it, find what matters and build a live, interactive board of charts with plain-English findings, then discuss it with them.
 
@@ -99,11 +106,19 @@ export async function runAgent(a: Analysis, userId: string, text: string, on: (e
 
   const checkChart = async (w: Widget) => {
     if (!w.sql) return w.kind === "insight" ? "ok" : "This chart needs sql.";
-    const r = await query(a, w.sql, { limit: 2000 });
+    const model = MODEL_KINDS.has(w.kind);
+    const r = await query(a, w.sql, { limit: model ? 50_000 : 2000 });
     const names = r.columns.map((c) => c.name);
     for (const c of [w.x, w.series, ...(w.y ?? [])].filter(Boolean) as string[])
       if (!names.includes(c)) return `The query returns ${names.join(", ")}; there's no column "${c}". Fix x/y/series or the SQL.`;
     if (!r.rows.length) return `The query returned no rows. Check it before charting:\n${preview(r)}`;
+    if (model) {
+      try {
+        return `Model result:\n${describeModel(w, compute(w, r))}`;
+      } catch (e) {
+        return `The query returns ${names.join(", ")}; the model couldn't run: ${(e as Error).message}`;
+      }
+    }
     return `Chart data (${r.rows.length} rows${r.truncated ? ", more cut off" : ""}):\n${preview(r)}`;
   };
 
@@ -121,10 +136,39 @@ export async function runAgent(a: Analysis, userId: string, text: string, on: (e
     tone: z.enum(["good", "bad", "neutral", "watch"]).optional(),
     format: z.enum(["number", "percent", "currency", "duration"]).optional().describe("percent expects 0.25 for 25%"),
     unit: z.string().max(12).optional().describe("Currency symbol or unit, e.g. ₹, $, hrs"),
-    options: z.record(z.string(), z.unknown()).optional().describe("Extras: max (gauge target), stack (true), smooth (true), sort ('none')"),
+    options: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .describe("Extras: max (gauge target), stack (true), smooth (true), average (true). forecast: horizon, period. drivers/whatif: target, features. correlation: method ('pearson'|'spearman')"),
   };
 
   const tools = [
+    betaZodTool({
+      name: "run_model",
+      description:
+        "Run a statistical model on a query's rows and read the result before charting it: forecast (x date, y value; options.horizon), " +
+        "drivers (what moves options.target; options.features or every other column), correlation (numeric columns, or y). " +
+        "Same inputs as add_chart with kind forecast / drivers / correlation.",
+      inputSchema: z.object({
+        kind: z.enum(["forecast", "drivers", "correlation"]),
+        sql: z.string().max(12000),
+        x: z.string().optional(),
+        y: z.array(z.string()).max(20).optional(),
+        options: z.record(z.string(), z.unknown()).optional(),
+        why: z.string().max(120).optional(),
+      }),
+      run: async ({ kind, sql, x, y, options, why }) => {
+        note(why || (kind === "forecast" ? "Ran a forecast" : kind === "drivers" ? "Found what drives it" : "Measured correlations"));
+        try {
+          const w = { id: "probe", kind, title: "", sql, x, y, options } as Widget;
+          const r = await query(a, sql, { limit: 50_000 });
+          if (!r.rows.length) return "The query returned no rows.";
+          return describeModel(w, compute(w, r));
+        } catch (e) {
+          return `Error: ${(e as Error).message}`;
+        }
+      },
+    }),
     betaZodTool({
       name: "run_sql",
       description: "Run one DuckDB SELECT (WITH, SUMMARIZE and DESCRIBE allowed) over the analysis's tables and see the result. Up to 200 rows shown.",

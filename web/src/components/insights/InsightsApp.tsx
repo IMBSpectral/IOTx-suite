@@ -19,7 +19,7 @@ type ChatMsg = { role: "user" | "assistant"; text: string; at: string; steps?: s
 type Analysis = { id: string; name: string; updatedAt: string; sources: Source[]; tables: Table[]; board: Widget[]; chat: ChatMsg[]; questions?: string[] };
 type Summary = { id: string; name: string; updatedAt: string; sources: number; tables: number; widgets: number };
 type Filter = { column: string; table?: string; values?: string[]; label?: string };
-type Result = Data | { error: string };
+type Result = (Data & { meta?: Record<string, unknown> }) | { error: string };
 
 const ACCEPT = ".xlsx,.xlsm,.csv,.tsv,.json,.ndjson,.jsonl,.parquet,.docx,.pptx,.pdf,.md,.markdown,.txt,.html,.htm,.xml,.yaml,.yml,.log";
 
@@ -587,7 +587,7 @@ function Card({
         {w.subtitle && <p>{w.subtitle}</p>}
       </div>
       <div className="ins-card-tools">
-        {w.kind !== "insight" && w.kind !== "kpi" && (
+        {w.kind !== "insight" && w.kind !== "kpi" && w.kind !== "whatif" && (
           <button onClick={onExpand} title="Expand">
             <Maximize2 size={14} />
           </button>
@@ -698,15 +698,151 @@ function Card({
         </div>
       ) : w.kind === "table" ? (
         <MiniTable w={w} d={data} />
+      ) : w.kind === "whatif" ? (
+        <WhatIf w={w} model={(data.meta as { model?: DriverModel } | undefined)?.model} />
       ) : (
-        <Chart w={w} data={data} height={h} onPick={onPick} chartRef={(c) => (chart.current = c)} />
+        <Chart w={w} data={data} height={h} onPick={MODEL_KINDS.has(w.kind) ? undefined : onPick} chartRef={(c) => (chart.current = c)} />
       )}
+      {data && <ModelNote w={w} data={data} />}
       {w.insight && (
         <div className="ins-why">
           <Lightbulb size={13} />
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{w.insight}</ReactMarkdown>
         </div>
       )}
+    </div>
+  );
+}
+
+const MODEL_KINDS = new Set(["forecast", "drivers", "whatif", "correlation"]);
+
+type DriverModel = {
+  target: string;
+  binary: boolean;
+  n: number;
+  r2: number;
+  intercept: number;
+  targetMean: number;
+  coef: Record<string, number | Record<string, number>>;
+  factors: { name: string; kind: "number" | "category"; importance: number; mean?: number; sd?: number; min?: number; max?: number; baseline?: string; levels?: { value: string; effect: number; count: number; mean: number }[] }[];
+  interactions: { factors: [string, string]; values: [string, string]; extra: number; count: number; mean: number }[];
+};
+
+/** How a model item was made and how far to trust it, in one line (and combinations for drivers). */
+function ModelNote({ w, data }: { w: Widget; data: Data & { meta?: Record<string, unknown> } }) {
+  const m = data.meta;
+  if (!m) return null;
+  if (w.kind === "forecast") {
+    const { method, mape, note } = m as { method: string; mape: number | null; note?: string };
+    return (
+      <div className="ins-model">
+        <Sparkles size={12} /> {method}
+        {mape !== null && mape !== undefined && (
+          <span className={`ins-acc ${mape < 0.1 ? "good" : mape < 0.25 ? "ok" : "poor"}`}>
+            {mape < 0.1 ? "High" : mape < 0.25 ? "Fair" : "Low"} accuracy: {(mape * 100).toFixed(1)}% average error on recent history it didn&apos;t see
+          </span>
+        )}
+        {note && <span className="ins-muted"> · {note}</span>}
+      </div>
+    );
+  }
+  if (w.kind === "drivers" || w.kind === "whatif") {
+    const model = (m as { model?: DriverModel }).model;
+    if (!model) return null;
+    const pct = (v: number) => (model.binary ? `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)} pts` : `${v >= 0 ? "+" : ""}${fmt(v, w)}`);
+    return (
+      <div className="ins-model col">
+        <div>
+          <Sparkles size={12} /> These factors explain <b>{(model.r2 * 100).toFixed(0)}%</b> of the variation in {model.target} across {model.n.toLocaleString()} rows.
+          <span className="ins-muted"> Associations, not proof of cause.</span>
+        </div>
+        {w.kind === "drivers" && model.interactions.length > 0 && (
+          <div className="ins-combos">
+            <b>Combinations that matter more than their parts</b>
+            {model.interactions.slice(0, 4).map((x, i) => (
+              <span key={i} className={`ins-combo ${x.extra > 0 === !model.binary ? "up" : "down"}`}>
+                {x.values[0]} × {x.values[1]}: <b>{pct(x.extra)}</b> extra · avg {model.binary ? `${(x.mean * 100).toFixed(0)}%` : fmt(x.mean, w)} · {x.count} rows
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+  if (w.kind === "correlation") return <div className="ins-model"><Sparkles size={12} /> {(m as { method?: string }).method === "spearman" ? "Spearman (rank) correlation" : "Pearson correlation"}: 1 moves together, −1 moves opposite, 0 no link. Hover a cell for details.</div>;
+  return null;
+}
+
+/** A live calculator from a drivers model: move each factor, see the predicted target. */
+function WhatIf({ w, model }: { w: Widget; model?: DriverModel }) {
+  const start = useMemo(() => {
+    const s: Record<string, number | string> = {};
+    for (const f of model?.factors ?? []) {
+      if (f.kind === "number") s[f.name] = +(f.mean ?? 0).toFixed(2);
+      else s[f.name] = [...(f.levels ?? [])].sort((a, b) => b.count - a.count)[0]?.value ?? f.baseline ?? "";
+    }
+    return s;
+  }, [model]);
+  const [vals, setVals] = useState(start);
+  useEffect(() => setVals(start), [start]);
+  if (!model) return <div className="ins-nodata">The model couldn&apos;t be built from this data.</div>;
+  const predict = (v: Record<string, number | string>) => {
+    let y = model.intercept;
+    for (const [k, c] of Object.entries(model.coef)) {
+      if (typeof c === "number") y += c * Number(v[k] ?? 0);
+      else y += c[String(v[k])] ?? 0;
+    }
+    return model.binary ? Math.min(1, Math.max(0, y)) : y;
+  };
+  const base = predict(start);
+  const now = predict(vals);
+  const show = (v: number) => (model.binary ? `${(v * 100).toFixed(1)}%` : fmt(v, w, true));
+  const delta = now - base;
+  const factors = model.factors.filter((f) => f.importance > 0.01).slice(0, 8);
+  return (
+    <div className="ins-whatif">
+      <div className="ins-whatif-result">
+        <span className="ins-muted">Predicted {model.target}</span>
+        <b>{show(now)}</b>
+        {Math.abs(delta) > 1e-9 && (
+          <span className={delta > 0 ? "up" : "down"}>
+            {delta > 0 ? <ArrowUp size={13} /> : <ArrowDown size={13} />} {model.binary ? `${(Math.abs(delta) * 100).toFixed(1)} pts` : fmt(Math.abs(delta), w, true)} vs typical {show(base)}
+          </span>
+        )}
+        <button className="ins-link" onClick={() => setVals(start)}>
+          Reset
+        </button>
+      </div>
+      <div className="ins-whatif-controls">
+        {factors.map((f) => (
+          <label key={f.name} className="ins-whatif-row">
+            <span>
+              {f.name} <small className="ins-muted">{(f.importance * 100).toFixed(0)}%</small>
+            </span>
+            {f.kind === "number" ? (
+              <>
+                <input
+                  type="range"
+                  min={f.min}
+                  max={f.max}
+                  step={((f.max ?? 1) - (f.min ?? 0)) / 100 || 1}
+                  value={Number(vals[f.name])}
+                  onChange={(e) => setVals({ ...vals, [f.name]: Number(e.target.value) })}
+                />
+                <output>{fmt(Number(vals[f.name]), undefined, true)}</output>
+              </>
+            ) : (
+              <select value={String(vals[f.name])} onChange={(e) => setVals({ ...vals, [f.name]: e.target.value })}>
+                {(f.levels ?? []).map((l) => (
+                  <option key={l.value} value={l.value}>
+                    {l.value}
+                  </option>
+                ))}
+              </select>
+            )}
+          </label>
+        ))}
+      </div>
     </div>
   );
 }
