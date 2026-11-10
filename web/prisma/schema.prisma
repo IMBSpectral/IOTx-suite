@@ -260,6 +260,8 @@ model Project {
   deletedAt   DateTime?
   // The message queue can be paused without losing what is queued.
   queuePaused Boolean   @default(false)
+  /// Hold the agent's changes in drafts for review before they join the working version (off: changes keep going; Publish is the only gate).
+  reviewDrafts Boolean  @default(false)
   // The agent's task list for this project (roadmap panel).
   tasks       Json?
 

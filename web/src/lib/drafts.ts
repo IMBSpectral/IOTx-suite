@@ -4,6 +4,7 @@ import { db } from "./db";
 import { repoDir } from "./paths";
 import { removeDraftDatabase } from "./cloud";
 import { deployIfChanged } from "./cloud-functions";
+import { commit, stageAll } from "./repo";
 
 /**
  * Drafts: proposed changes held on their own branch until accepted.
@@ -291,4 +292,48 @@ export async function markDraftSeen(draftId: string, userId: string) {
     where: { id: draftId },
     data: { seenBy: { push: userId } },
   });
+}
+
+/**
+ * With review off (the default), the agent's work goes straight into the working version.
+ * Drafts left open from before — or from a time review was on — are folded in first, oldest
+ * first, so no work is lost: each is caught up with main if it fell behind, then accepted.
+ * A draft that can't be folded in (its changes clash with main's) stays open, and its id is
+ * returned so the turn keeps working in it rather than leaving that work behind.
+ */
+export async function foldOpenDrafts(projectId: string): Promise<{ folded: string[]; stuck: string | null }> {
+  const open = await db.draft.findMany({
+    where: { projectId, status: { in: ["BUILDING", "READY", "FAILED"] } },
+    orderBy: { createdAt: "asc" },
+  });
+  const folded: string[] = [];
+  for (const d of open) {
+    // Anything on disk that was never recorded belongs to the draft it was made in.
+    if ((await currentDraftId(projectId)) === d.id && (await stageAll(projectId).catch(() => 0)) > 0) {
+      await commit(projectId, "Saved changes that hadn't been recorded").catch(() => undefined);
+    }
+    // The branch, not the database record, says whether the draft holds work: a save made
+    // just before (here or by the caller) may not be recorded on the draft yet.
+    const head = await headOf(repoDir(projectId), d.branch);
+    if (head && head !== d.baseSha && head !== d.headSha) await db.draft.update({ where: { id: d.id }, data: { headSha: head } });
+    const fresh = await db.draft.findUniqueOrThrow({ where: { id: d.id } });
+    if (!head || head === fresh.baseSha) {
+      // Nothing in it: retire it without a trace.
+      if ((await currentDraftId(projectId)) === d.id) await checkoutDraft(projectId, null);
+      await db.draft.update({ where: { id: d.id }, data: { status: "REVERTED", revertedAt: new Date() } });
+      continue;
+    }
+    try {
+      // A leftover BUILDING or a FAILED turn still holds real work; it is folded in like a ready one.
+      if (fresh.status !== "READY") await db.draft.update({ where: { id: d.id }, data: { status: "READY" } });
+      if (await draftBehind(projectId, fresh)) await syncDraft(projectId, d.id);
+      await acceptDraft(projectId, d.id);
+      folded.push(d.name);
+    } catch {
+      await db.draft.update({ where: { id: d.id }, data: { status: fresh.status === "BUILDING" ? "READY" : fresh.status } }).catch(() => undefined);
+      return { folded, stuck: d.id };
+    }
+  }
+  if (await currentDraftId(projectId)) await checkoutDraft(projectId, null);
+  return { folded, stuck: null };
 }

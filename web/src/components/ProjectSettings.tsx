@@ -27,6 +27,32 @@ export default function ProjectSettings({
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Review changes before they're kept (drafts). Off by default: changes keep going, Publish is the only gate.
+  const [review, setReview] = useState<boolean | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    fetch(`/api/projects/${projectId}/drafts`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { review?: boolean } | null) => live && setReview(!!d?.review))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [projectId]);
+  async function toggleReview(on: boolean) {
+    setReviewError(null);
+    setReview(on);
+    const res = await fetch(`/api/projects/${projectId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reviewDrafts: on }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      setReview(!on);
+      setReviewError("Couldn't save that. Try again.");
+    }
+  }
 
   async function save() {
     setBusy(true);
@@ -73,6 +99,30 @@ export default function ProjectSettings({
                 Not published yet.
               </p>
             )}
+          </div>
+        </section>
+
+        <section>
+          <h3 className="mb-2 text-sm font-medium">Changes</h3>
+          <div className="rounded-xl border p-4" style={{ background: "var(--panel)" }}>
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!review}
+                disabled={review === null}
+                onChange={(e) => void toggleReview(e.target.checked)}
+              />
+              <span className="text-xs">
+                <span className="font-medium">Review changes before they&apos;re kept</span>
+                <span className="mt-1 block" style={{ color: "var(--muted)" }}>
+                  {review
+                    ? "On: each change waits in a draft until you accept it. Useful when other people work on this project."
+                    : "Off: every change goes straight into the working version and the work keeps going. Your live site still changes only when you publish."}
+                </span>
+              </span>
+            </label>
+            {reviewError && <p className="mt-2 text-xs text-red-600">{reviewError}</p>}
           </div>
         </section>
 

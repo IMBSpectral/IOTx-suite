@@ -48,20 +48,23 @@ export default function DraftBar({
   const [error, setError] = useState<string | null>(null);
   // Whether the project uses Forge Cloud, so drafts can test with their own data.
   const [cloud, setCloud] = useState(false);
+  // Review before keeping (per project). Off: changes go straight into the working version, so the strip only shows while a draft is open.
+  const [review, setReview] = useState(false);
   // "View changes" for the draft being looked at.
   const [diffOf, setDiffOf] = useState<{ id: string; name: string } | null>(null);
 
   const fetchDrafts = useCallback(
     () =>
       fetch(`/api/projects/${projectId}/drafts`)
-        .then((r) => (r.ok ? (r.json() as Promise<{ drafts: Draft[]; current: string | null; cloud?: boolean }>) : null))
+        .then((r) => (r.ok ? (r.json() as Promise<{ drafts: Draft[]; current: string | null; cloud?: boolean; review?: boolean }>) : null))
         .catch(() => null),
     [projectId],
   );
-  const apply = useCallback((d: { drafts: Draft[]; current: string | null; cloud?: boolean } | null) => {
+  const apply = useCallback((d: { drafts: Draft[]; current: string | null; cloud?: boolean; review?: boolean } | null) => {
     if (!d) return;
     setDrafts(d.drafts);
     setCloud(!!d.cloud);
+    setReview(!!d.review);
     setCurrent(d.current);
     setFocus((f) => (f && d.drafts.some((x) => x.id === f) ? f : d.current));
   }, []);
@@ -101,7 +104,7 @@ export default function DraftBar({
 
   const open = drafts.filter((d) => d.status !== "MERGED");
   const accepted = drafts.filter((d) => d.status === "MERGED").slice(0, 5);
-  if (drafts.length === 0) return null;
+  if (drafts.length === 0 || (!review && open.length === 0)) return null;
 
   const focused = drafts.find((d) => d.id === focus) ?? null;
 

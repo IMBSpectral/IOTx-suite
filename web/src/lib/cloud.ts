@@ -489,14 +489,15 @@ export async function listTables(projectId: string) {
   return out;
 }
 
-/** Read-only SQL for the agent: a SELECT on a read-only connection (or READ ONLY transaction), 50 rows at most. */
-export async function queryDatabase(projectId: string, sql: string): Promise<Record<string, unknown>[]> {
+/** Read-only SQL for the agent: a SELECT on a read-only connection (or READ ONLY transaction), 50 rows at most. env "live" reads the published app's own database (once there is one) instead of the preview's. */
+export async function queryDatabase(projectId: string, sql: string, env?: "test" | "live"): Promise<Record<string, unknown>[]> {
   await requireCloud(projectId);
   if (!/^\s*(SELECT|WITH)\b/i.test(sql)) throw new CloudError("Only SELECT queries can be run here.");
   await checkSqlScope(projectId, sql).catch(() => {
     throw new CloudError("Only SELECT queries can be run here.");
   });
-  const rows = (await open(projectId).transaction((tx) => tx.all<Record<string, unknown>>(sql), { readOnly: true })).slice(0, 50);
+  const target = env === "live" && (await dataExists(`${projectId}@live`)) ? `${projectId}@live` : projectId;
+  const rows = (await open(target).transaction((tx) => tx.all<Record<string, unknown>>(sql), { readOnly: true })).slice(0, 50);
   return rows.map((r) => ({ ...r, ...("password_hash" in r ? { password_hash: "[hidden]" } : {}) }));
 }
 

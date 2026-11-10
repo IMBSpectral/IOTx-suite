@@ -13,7 +13,8 @@ import { db } from "./db";
 import { generate } from "./generate";
 import { emit, forget, resetEvents } from "./events";
 import { enforceInvariants } from "./invariants";
-import { createDraft, checkoutDraft } from "./drafts";
+import { createDraft, checkoutDraft, foldOpenDrafts } from "./drafts";
+import { openVariants } from "./variants";
 import { repoDir } from "./paths";
 import { commit, stageAll } from "./repo";
 import { charge, creditsForUsage, freeBuildHour } from "./credits";
@@ -214,7 +215,27 @@ async function runBuild(buildId: string) {
     status: "BUILDING" | "READY" | "FAILED" | "MERGED" | "REVERTED";
     created: boolean;
   } | null = null;
-  if (!draftId && !readOnly) {
+  // Review off (the default): the work goes straight into the working version and keeps going;
+  // nothing reaches the live site until Publish. Drafts still open from before are folded in
+  // first, so no earlier work is left behind. Variants keep their drafts (they're a choice in progress).
+  const review = build.project.reviewDrafts || !!(await openVariants(projectId).catch(() => null));
+  if (!draftId && !readOnly && !review && build.project.publishedSha) {
+    if ((await stageAll(projectId).catch(() => 0)) > 0) {
+      await commit(projectId, "Saved changes that hadn't been recorded").catch(() => undefined);
+    }
+    const { folded, stuck } = await foldOpenDrafts(projectId).catch(() => ({ folded: [] as string[], stuck: null }));
+    if (folded.length) await emit(buildId, { type: "draft_ready", draftId: "", ok: true });
+    if (stuck) {
+      // Its changes clash with the working version: keep working in it rather than leave it behind.
+      draftId = stuck;
+      draftWas = { status: "READY", created: false };
+      await db.$transaction([
+        db.draft.update({ where: { id: stuck }, data: { status: "BUILDING" } }),
+        db.build.update({ where: { id: buildId }, data: { draftId } }),
+      ]);
+    }
+  }
+  if (!draftId && !readOnly && review) {
     // A follow-up message continues the draft still under review — including
     // a failed one, which is exactly what "try to fix" needs. Only when no
     // draft is open does the work start a new branch from main.
@@ -236,7 +257,7 @@ async function runBuild(buildId: string) {
   }
   // Drafts keep changes away from a live app until they're accepted, so a
   // project that has never been published builds straight onto main.
-  if (!draftId && !readOnly && build.project.publishedSha) {
+  if (!draftId && !readOnly && review && build.project.publishedSha) {
     // The author is the person who asked — they've seen the draft by
     // definition, and collaborators get it flagged as a new arrival.
     draftWas = { status: "BUILDING", created: true };
@@ -428,7 +449,7 @@ async function runBuild(buildId: string) {
         ok: !stopped && !failure && verified,
       });
     } else if (touched.length > 0) {
-      // No draft (the project isn't published yet): the change goes straight onto main.
+      // No draft (not published yet, or review is off): the change goes straight into the working version.
       sha = await commit(projectId, versionTitle, author);
       await db.project.update({ where: { id: projectId }, data: { headSha: sha, updatedAt: new Date() } });
       // Server functions go live with the code that calls them.

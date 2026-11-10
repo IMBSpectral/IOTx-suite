@@ -1159,12 +1159,16 @@ function buildTools(projectId: string, onFile: (e: BuildEvent) => void, userId: 
   const queryDb = betaZodTool({
     name: "query_database",
     description:
-      `Run a read-only SELECT against the app's ${CLOUD} database to inspect tables and data (50 rows max).`,
-    inputSchema: z.object({ sql: z.string() }),
-    run: async ({ sql }) => {
-      onFile({ type: "tool", step: "logs:Queried the database" });
+      `Run a read-only SELECT against the app's ${CLOUD} database to inspect tables and data (50 rows max). ` +
+      `Once the app is published it has two databases: "test" (the preview, the default) and "live" (the published site and custom domain). ` +
+      `They share tables, but not records: accounts and rows made in the preview reach the live app only when the user publishes (new records are copied then; existing live records are never overwritten). ` +
+      `When something works in the preview but not on the live site (a login that says wrong email or password, missing data), query env "live" first to see what the live app actually has, before changing any code. ` +
+      `If an account or record is missing there, tell the user it will be copied on their next publish, rather than changing code.`,
+    inputSchema: z.object({ sql: z.string(), env: z.enum(["test", "live"]).optional() }),
+    run: async ({ sql, env }) => {
+      onFile({ type: "tool", step: env === "live" ? "logs:Queried the live app's database" : "logs:Queried the database" });
       const tables = await listTables(projectId);
-      const rows = await queryDatabase(projectId, sql);
+      const rows = await queryDatabase(projectId, sql, env);
       return JSON.stringify({
         tables: tables.map((t) => ({
           name: t.name,
