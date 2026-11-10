@@ -6,8 +6,8 @@ import path from "node:path";
 import { db } from "./db";
 import { buildDir, repoDir } from "./paths";
 import { scanProject, type Finding } from "./scan";
-import { headSha as currentHead } from "./repo";
-import { checkoutDraft, currentDraftId } from "./drafts";
+import { headSha as currentHead, exportTree } from "./repo";
+
 import { ensureSandbox, sandboxExec } from "./sandbox";
 import { mapsBuildEnv } from "./google-maps";
 import { syncLive } from "./cloud-envs";
@@ -94,17 +94,31 @@ async function exists(p: string) {
 }
 
 /**
- * Run `fn` with the working tree on main, restoring whatever was checked out.
- * Publishing builds the accepted version, never an unaccepted draft.
+ * The accepted version's files, exported to .snapshots/<sha> next to the working tree.
+ *
+ * Builds and checks of main used to check main out in the working tree and switch back after.
+ * The agent edits that same tree and the live preview serves it, so a publish, a preview link,
+ * a shared link or the health monitor running during a build switched branches under the agent:
+ * its edits landed on main or were overwritten, the preview showed main, and earlier work went
+ * missing (Nov 2026). Now main is exported to its own folder and nothing switches branches.
  */
-async function onMain<T>(projectId: string, fn: () => Promise<T>): Promise<T> {
-  const draft = await currentDraftId(projectId);
-  if (draft) await checkoutDraft(projectId, null);
-  try {
-    return await fn();
-  } finally {
-    if (draft) await checkoutDraft(projectId, draft);
+const exporting = new Map<string, Promise<string>>();
+async function snapshotSource(projectId: string, sha: string) {
+  const host = path.join(repoDir(projectId), ".snapshots", sha);
+  if (await exists(path.join(host, "package.json"))) return `/app/.snapshots/${sha}`;
+  const key = `${projectId}/${sha}`;
+  if (!exporting.has(key)) {
+    // Keep the export out of `git status` for good.
+    const exclude = path.join(repoDir(projectId), ".git", "info", "exclude");
+    const cur = await fs.readFile(exclude, "utf8").catch(() => "");
+    if (!/^\/?\.snapshots\/?$/m.test(cur)) {
+      await fs.mkdir(path.dirname(exclude), { recursive: true });
+      await fs.writeFile(exclude, `${cur.replace(/\n?$/, "\n")}.snapshots/\n.builds/\n`);
+    }
+    exporting.set(key, exportTree(projectId, sha, host).then(() => host).finally(() => exporting.delete(key)));
   }
+  await exporting.get(key);
+  return `/app/.snapshots/${sha}`;
 }
 
 /** Production build of main into its snapshot directory, reusing one that exists. */
@@ -115,9 +129,10 @@ async function buildSnapshot(projectId: string, sha: string): Promise<{ ok: bool
   if (state.status !== "ready") {
     return { ok: false, error: state.status === "failed" ? state.error : "The build container is not running." };
   }
+  const src = await snapshotSource(projectId, sha);
   const r = await sandboxExec(
     projectId,
-    `${await mapsBuildEnv(projectId)}npx vite build --outDir /app/.builds/${sha} --emptyOutDir --logLevel error`,
+    `cd ${src} && ${await mapsBuildEnv(projectId)}npx vite build --outDir /app/.builds/${sha} --emptyOutDir --logLevel error`,
     300_000,
   );
   if (r.code !== 0 || !(await exists(path.join(out, "index.html")))) {
@@ -152,30 +167,20 @@ export async function pruneBuilds(projectId: string) {
     }
     await fs.rm(path.join(root, n), { recursive: true, force: true });
   }
+  // Exported sources: only main's is worth keeping (any other is re-exported if rebuilt).
+  const snaps = path.join(repoDir(projectId), ".snapshots");
+  for (const n of await fs.readdir(snaps).catch(() => [] as string[])) if (!keep.has(n) || n.includes(".part-")) await fs.rm(path.join(snaps, n), { recursive: true, force: true }).catch(() => undefined);
 }
 
 export async function versionBuilt(projectId: string, sha: string) {
   return exists(path.join(buildDir(projectId, sha), "index.html"));
 }
 
-/**
- * Build a past version: check the tree out at that commit, build it, and put
- * back whatever was checked out. Refused while the agent is working, since
- * it shares the working tree.
- */
+/** Build a past version from its own exported copy (the working tree is never switched). */
 export async function buildVersion(projectId: string, sha: string): Promise<{ ok: boolean; error?: string }> {
   if (await versionBuilt(projectId, sha)) return { ok: true };
-  const running = await db.build.count({ where: { projectId, status: "RUNNING" } });
-  if (running) return { ok: false, error: "Wait for the agent to finish, then rebuild this version." };
-  const dir = repoDir(projectId);
-  await git.readCommit({ fs, dir, oid: sha });
-  const branch = (await git.currentBranch({ fs, dir, fullname: false })) ?? "main";
-  await git.checkout({ fs, dir, ref: sha, force: true });
-  try {
-    return await buildSnapshot(projectId, sha);
-  } finally {
-    await git.checkout({ fs, dir, ref: branch, force: true });
-  }
+  await git.readCommit({ fs, dir: repoDir(projectId), oid: sha });
+  return buildSnapshot(projectId, sha);
 }
 
 const snapshotting = new Map<string, Promise<{ sha: string; ok: boolean; error?: string }>>();
@@ -190,7 +195,7 @@ export function ensureMainSnapshot(projectId: string) {
   const job = (async () => {
     const sha = await mainSha(projectId);
     if (await exists(path.join(buildDir(projectId, sha), "index.html"))) return { sha, ok: true };
-    return { sha, ...(await onMain(projectId, () => buildSnapshot(projectId, sha))) };
+    return { sha, ...(await buildSnapshot(projectId, sha)) };
   })().finally(() => snapshotting.delete(projectId));
   snapshotting.set(projectId, job);
   return job;
@@ -209,8 +214,9 @@ const SEVERITY_MAP: Record<Finding["severity"], CheckItem["severity"]> = {
  * missing property) crash the app as soon as it runs. Reported as a warning:
  * many generated apps run fine with minor type errors, so this never blocks.
  */
-async function typeCheck(projectId: string): Promise<Check> {
-  const r = await sandboxExec(projectId, "npx tsc --noEmit -p tsconfig.app.json 2>/dev/null || npx tsc --noEmit", 180_000).catch(() => null);
+async function typeCheck(projectId: string, sha: string): Promise<Check> {
+  const src = await snapshotSource(projectId, sha);
+  const r = await sandboxExec(projectId, `cd ${src} && (npx tsc --noEmit -p tsconfig.app.json 2>/dev/null || npx tsc --noEmit)`, 180_000).catch(() => null);
   if (!r) return { id: "types", label: "Type check", status: "skipped", summary: "Couldn't run the type checker.", items: [] };
   const errors = r.out
     .split("\n")
@@ -233,7 +239,7 @@ async function securityCheck(projectId: string, sha: string): Promise<Check> {
   // Workspace rules add to the project's own: more checks off, and how severe a finding must be to block.
   const rules = await projectRules(projectId);
   const disabled = [...((p?.securityConfig as { disabled?: string[] } | null)?.disabled ?? []), ...rules.disabledChecks];
-  const findings = [...(await scanProject(projectId, { disabled })), ...(await backendFindings(projectId))];
+  const findings = [...(await scanProject(projectId, { disabled, ref: sha })), ...(await backendFindings(projectId))];
   // Findings the user ignored with a reason stay ignored across scans.
   const ignored = await db.securityFinding.findMany({
     where: { projectId, ignored: true },
@@ -322,7 +328,7 @@ export async function seoCheck(projectId: string, sha: string, seo: Seo): Promis
   const files = await git.listFiles({ fs, dir: repoDir(projectId), ref: sha }).catch(() => [] as string[]);
   let missingAlt = 0;
   for (const f of files.filter((x) => /^src\/.*\.(tsx|jsx)$/.test(x))) {
-    const src = await fs.readFile(path.join(repoDir(projectId), f), "utf8").catch(() => "");
+    const src = await fs.readFile(path.join(repoDir(projectId), ".snapshots", sha, f), "utf8").catch(() => "");
     missingAlt += (src.match(/<img(?![^>]*\balt=)[^>]*>/g) ?? []).length;
   }
   if (missingAlt) items.push({ severity: "medium", title: `${missingAlt} image${missingAlt === 1 ? "" : "s"} without alt text` });
@@ -345,7 +351,7 @@ export async function runChecks(
   const project = await db.project.findUniqueOrThrow({ where: { id: projectId } });
   const seo = (project.seo as Seo | null) ?? {};
 
-  return onMain(projectId, async () => {
+  {
     const sha = await mainSha(projectId);
     onStep?.("building");
     const built = await buildSnapshot(projectId, sha);
@@ -360,7 +366,7 @@ export async function runChecks(
     onStep?.("checks");
     const [types, security, dependencies, seoResult] = await Promise.all([
       built.ok
-        ? typeCheck(projectId)
+        ? typeCheck(projectId, sha)
         : Promise.resolve<Check>({ id: "types", label: "Type check", status: "skipped", summary: "Skipped: the build failed.", items: [] }),
       securityCheck(projectId, sha),
       built.ok
@@ -380,7 +386,7 @@ export async function runChecks(
     };
     await db.project.update({ where: { id: projectId }, data: { lastChecks: result } });
     return result;
-  });
+  }
 }
 
 /** Run the checks and, if nothing blocks, put main live. */
