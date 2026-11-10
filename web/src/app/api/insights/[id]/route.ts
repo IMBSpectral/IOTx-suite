@@ -7,7 +7,8 @@ type Ctx = { params: Promise<{ id: string }> };
 /** GET -> { analysis } · PATCH { name?, board? } · DELETE */
 export const GET = insightsRoute(async (_req: Request, { params }: Ctx) => {
   const { a } = await analysisFor((await params).id);
-  return Response.json({ analysis: a });
+  // busy: the analyst is still working on a message (the page polls this after a dropped connection).
+  return Response.json({ analysis: a, busy: !!(globalThis as { __insightsRunning?: Set<string> }).__insightsRunning?.has(a.id) });
 });
 
 export const PATCH = insightsRoute(async (req: Request, { params }: Ctx) => {

@@ -5,7 +5,9 @@ import { InsufficientCredits, SpendLimitReached } from "@/lib/credits";
 type Ctx = { params: Promise<{ id: string }> };
 export const maxDuration = 800;
 
-const running = new Set<string>();
+// Analyses with a turn in progress (shared across route copies, so GET /api/insights/:id can report it).
+const G = globalThis as unknown as { __insightsRunning?: Set<string> };
+const running = (G.__insightsRunning ??= new Set<string>());
 
 /** POST { text } -> application/x-ndjson: text, thought, step, board, tables, questions, name, then done or error. */
 export const POST = insightsRoute(async (req: Request, { params }: Ctx) => {

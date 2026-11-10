@@ -294,6 +294,8 @@ function Workspace({ a, setA, onBack, autoStart, clearAutoStart }: { a: Analysis
     setA(working);
     const state: Live = { text: "", thought: "", steps: [], busy: true };
     setLive({ ...state });
+    let finished = false;
+    let serverError: string | null = null;
     try {
       const r = await fetch(`/api/insights/${cur.id}/chat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
       if (!r.ok || !r.body) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error || "The analyst couldn't start.");
@@ -329,21 +331,48 @@ function Workspace({ a, setA, onBack, autoStart, clearAutoStart }: { a: Analysis
             working = { ...working, name: ev.name as string };
             setA(working);
           } else if (ev.type === "questions") setQuestions(ev.questions as string[]);
-          else if (ev.type === "error") throw new Error(ev.error as string);
-          else if (ev.type === "done") {
+          else if (ev.type === "error") {
+            serverError = ev.error as string;
+            throw new Error(serverError);
+          } else if (ev.type === "done") {
+            finished = true;
             working = { ...working, chat: [...working.chat, { role: "assistant", text: (ev.reply as string) || state.text, at: new Date().toISOString(), steps: ev.steps as string[], questions: ev.questions as string[] }] };
             setA(working);
           }
           paint();
         }
       }
+      if (!finished) throw new Error("connection closed");
     } catch (e) {
-      setNotice((e as Error).message);
-      working = { ...working, chat: [...working.chat, { role: "assistant", text: `⚠️ ${(e as Error).message}`, at: new Date().toISOString() }] };
-      setA(working);
+      // The connection dropped (network, proxy, laptop sleep) but the analyst keeps working on the
+      // server and saves its result: wait for it and show it, instead of an error.
+      const recovered = !serverError && (await recover(cur.id, state));
+      if (!recovered) {
+        const msg = serverError ?? "The connection to the analyst was lost. Reload the page to see whether it finished.";
+        setNotice(msg);
+        working = { ...working, chat: [...working.chat, { role: "assistant", text: `⚠️ ${msg}`, at: new Date().toISOString() }] };
+        setA(working);
+      }
     } finally {
       setLive(null);
     }
+  };
+
+  /** After a dropped connection: poll until the server says the turn is over, then load what it saved. */
+  const recover = async (id: string, state: Live) => {
+    state.steps.push("Connection dropped: the analyst is still working, reconnecting…");
+    setLive({ ...state, steps: [...state.steps] });
+    for (let i = 0; i < 225; i++) {
+      await new Promise((r) => setTimeout(r, 4000));
+      const r = await api<{ analysis: Analysis; busy: boolean }>(`/api/insights/${id}`).catch(() => null);
+      if (!r) continue;
+      setA(r.analysis);
+      if (!r.busy) {
+        setQuestions(r.analysis.questions ?? []);
+        return true;
+      }
+    }
+    return false;
   };
 
   // Once, even when React runs effects twice (development) or the parent re-renders.
