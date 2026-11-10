@@ -1,4 +1,4 @@
-import { listFiles, readFile } from "./repo";
+import { listFiles, listFilesAt, readFile, readFileAt } from "./repo";
 
 type Severity = "INFO" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
@@ -286,9 +286,10 @@ const TEXT = /\.(?:tsx?|jsx?|mjs|cjs|css|html|json|md|txt|env(?:\.[\w.-]+)?)$|(^
 
 export async function scanProject(
   projectId: string,
-  opts: { disabled?: string[] } = {},
+  opts: { disabled?: string[]; ref?: string } = {},
 ): Promise<Finding[]> {
-  const files = await listFiles(projectId);
+  // With a ref, the scan reads that version (main, for publishing), not the working tree.
+  const files = opts.ref ? await listFilesAt(projectId, opts.ref) : await listFiles(projectId);
   const findings: Finding[] = [];
   const active = CHECKS.filter((c) => !opts.disabled?.includes(c.id));
 
@@ -297,7 +298,7 @@ export async function scanProject(
 
     let source: string;
     try {
-      source = await readFile(projectId, file);
+      source = opts.ref ? await readFileAt(projectId, opts.ref, file) : await readFile(projectId, file);
     } catch {
       continue;
     }
