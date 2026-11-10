@@ -18,7 +18,9 @@ export async function POST(req: Request) {
   const back = (path: string) => new URL(path, `${url.protocol}//${host ?? url.host}`).toString();
   if ("error" in r) {
     const q = new URLSearchParams({ pw_error: r.error ?? "", ...(raw ? { redirect: next } : {}), email: String(fd.get("email") ?? "").slice(0, 200) });
-    return new Response(null, { status: 303, headers: { location: back(`/login?${q}`) } });
+    // Products with their own sign-in page (Insights at /analytics/login) get the error back there.
+    const page = fd.get("page") === "/analytics/login" ? "/analytics/login" : "/login";
+    return new Response(null, { status: 303, headers: { location: back(`${page}?${q}`) } });
   }
   const res = new Response(null, { status: 303, headers: { location: back(next) } });
   res.headers.append("set-cookie", sessionCookie(r.sessionToken, r.expires));

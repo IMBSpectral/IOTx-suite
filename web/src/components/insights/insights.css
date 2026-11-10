@@ -241,3 +241,16 @@
 .ins-whatif-row select { grid-column: span 2; border: 1px solid var(--ix-line); border-radius: 8px; padding: 5px 8px; background: var(--ix-panel); color: var(--ix-ink); font: 13px var(--font-sans); }
 .ins-whatif-row input[type=range] { accent-color: var(--accent); width: 100%; }
 .ins-whatif-row output { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* ── Insights sign-in (/analytics/login) ── */
+.si-brand .ins-sa-logo { width: 26px; height: 26px; }
+.ins-login-art { background: linear-gradient(135deg, #4c1d95, #0e7490) !important; }
+.ins-login-cards { display: grid; gap: 14px; width: min(360px, 80%); margin: 32px auto 0; }
+.ins-login-card { background: rgba(255,255,255,.95); color: #14152b; border-radius: 16px; padding: 14px 16px; display: grid; gap: 6px; box-shadow: 0 18px 40px rgba(0,0,0,.25); }
+.ins-login-card:nth-child(2) { margin-left: 32px; }
+.ins-login-card small { color: #6a6e8a; font-size: 12px; }
+.ins-login-card b { font-size: 20px; letter-spacing: -0.02em; }
+.ins-login-card.warn { border-left: 4px solid #ef4444; }
+.ins-login-bars { display: grid; gap: 6px; }
+.ins-login-bars i { display: block; height: 10px; border-radius: 6px; background: linear-gradient(90deg, #6366f1, #06b6d4); }
+.ins-login-art .si-art-copy p { color: #fff !important; }
