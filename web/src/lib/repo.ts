@@ -166,20 +166,33 @@ export async function exportTree(projectId: string, ref: string, dest: string) {
  * as by the agent's file tools. Without this, anything not written through write_file was never
  * committed and vanished at the next checkout. Ignored paths (.gitignore, build output, the
  * agent's scratch folder) are left out.
+ *
+ * Returns how many files now differ from the last saved version (HEAD), whether they were staged
+ * just now or earlier. Callers use it to decide whether there is a version to save, so a change
+ * staged earlier in the turn (after each command, by the checkpoint) must still count — counting
+ * only files staged by this call left command edits unsaved and the Publish button hidden (Nov 2026).
  */
 export async function stageAll(projectId: string) {
   const dir = repoDir(projectId);
   const SKIP = /^(node_modules|\.builds|\.snapshots|tmp|\.cache|dist)(\/|$)/;
   const matrix = await git.statusMatrix({ fs, dir, filter: (f) => !SKIP.test(f) }).catch(() => [] as [string, number, number, number][]);
   let n = 0;
+  // statusMatrix: head 0 absent / 1 present; work 0 absent / 1 same as HEAD / 2 changed;
+  // stage 0 absent / 1 same as HEAD / 2 same as work / 3 neither.
   for (const [file, head, work, stage] of matrix) {
-    if (head === work && work === stage) continue;
+    if (head === 0 && work === 0) {
+      // Added, then deleted before it was saved: nothing to keep.
+      if (stage !== 0) await git.remove({ fs, dir, filepath: file });
+      continue;
+    }
     if (work === 0) {
-      await git.remove({ fs, dir, filepath: file });
+      if (stage !== 0) await git.remove({ fs, dir, filepath: file });
       n++;
-    } else if (work !== stage || head !== work) {
-      if (work === 2 && stage === 2 && head === 1) continue;
-      await git.add({ fs, dir, filepath: file });
+    } else if (work === 1) {
+      // Same as the saved version; undo anything staged that no longer applies.
+      if (stage !== 1) await git.add({ fs, dir, filepath: file });
+    } else {
+      if (stage !== 2) await git.add({ fs, dir, filepath: file });
       n++;
     }
   }
