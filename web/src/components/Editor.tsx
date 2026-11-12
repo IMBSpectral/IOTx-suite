@@ -528,7 +528,11 @@ export default function Editor({
   const onPublishInfo = useCallback((i: PublishInfo) => setPublishInfo(i), []);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Bumped whenever the app may have changed (a build finished, undo, restore, a draft moved), so the
+  // Publish button re-checks against the live version instead of waiting for a page refresh.
+  const [changeKey, setChangeKey] = useState(0);
   const refreshFiles = useCallback(async () => {
+    setChangeKey((k) => k + 1);
     const res = await fetch(`/api/projects/${projectId}/files`);
     if (res.ok) setFiles((await res.json()).files ?? []);
   }, [projectId]);
@@ -547,6 +551,7 @@ export default function Editor({
   );
 
   const reloadPreview = useCallback(() => {
+    setChangeKey((k) => k + 1);
     setPreview((u) => u.replace(/sha=[^&]*/, `sha=${Date.now()}`));
     const frame = frameRef.current;
     if (frame?.src) frame.src = frame.src;
@@ -1252,6 +1257,7 @@ export default function Editor({
         open={publishOpen}
         onClose={() => setPublishOpen(false)}
         onInfo={onPublishInfo}
+        refreshKey={changeKey + draftsVersion}
         onFix={(message) => void send(message, "build")}
       />
       {navOpen && sidebar && (
