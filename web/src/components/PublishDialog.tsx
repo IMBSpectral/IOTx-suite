@@ -67,12 +67,15 @@ export default function PublishDialog({
   onClose,
   onInfo,
   onFix,
+  refreshKey = 0,
 }: {
   projectId: string;
   open: boolean;
   onClose: () => void;
   onInfo: (info: PublishInfo) => void;
   onFix: (message: string) => void;
+  /** Changes whenever the app may have changed; the button label is re-checked then. */
+  refreshKey?: number;
 }) {
   const [info, setInfo] = useState<PublishInfo | null>(null);
   const brand = useBrand();
@@ -114,14 +117,26 @@ export default function PublishDialog({
   );
   const load = useCallback(() => fetchInfo().then(apply), [fetchInfo, apply]);
 
-  // Refreshed on mount (for the button label) and whenever the dialog opens.
+  // Refreshed on mount (for the button label), whenever the dialog opens, whenever the app changes
+  // (a build finished, undo, restore), and when the tab comes back into view.
   useEffect(() => {
     let live = true;
     fetchInfo().then((d) => live && apply(d));
     return () => {
       live = false;
     };
-  }, [open, fetchInfo, apply]);
+  }, [open, refreshKey, fetchInfo, apply]);
+  useEffect(() => {
+    const onShow = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    document.addEventListener("visibilitychange", onShow);
+    window.addEventListener("focus", onShow);
+    return () => {
+      document.removeEventListener("visibilitychange", onShow);
+      window.removeEventListener("focus", onShow);
+    };
+  }, [load]);
 
   function close() {
     // Reset the run state here rather than on open, so reopening starts clean.
