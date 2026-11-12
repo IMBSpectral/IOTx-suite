@@ -246,13 +246,16 @@ function ensureWarm(projectId: string) {
   if (!p) {
     p = (async () => {
       const name = warmName(projectId);
-      const st = await docker(["inspect", "-f", "{{.State.Running}}", name], 20_000);
-      if (st.code === 0 && st.out.trim() === "true") return;
+      const st = await docker(["inspect", "-f", "{{.State.Running}} {{.HostConfig.Init}}", name], 20_000);
+      // Reused only when running and started with --init; older containers are replaced.
+      if (st.code === 0 && st.out.trim() === "true true") return;
       if (st.code === 0) await docker(["rm", "-f", name], 20_000);
       await fs.mkdir(fnRoot(projectId), { recursive: true });
       const r = await docker(
         [
-          "run", "-d", "--name", name, "--label", "forge.fn=1",
+          // --init: a tiny init as PID 1 reaps finished calls. Without it every call left a zombie
+          // behind (tail never reaps), and at the pids limit no call could start (OCI "procReady not received").
+          "run", "-d", "--init", "--name", name, "--label", "forge.fn=1",
           "--memory", "512m", "--cpus", "1", "--pids-limit", "128",
           "--read-only", "--tmpfs", "/tmp:size=32m",
           "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--user", "node",
@@ -355,7 +358,9 @@ export async function invokeFunction(
     started = Date.now();
     r = await exec();
     // The container went away (idle removal, Docker restart): start it again once.
-    if (r.code !== 0 && /No such container|is not running/i.test(r.out)) {
+    // A container that can no longer start processes (OCI runtime exec failed) is replaced too.
+    if (r.code !== 0 && /No such container|is not running|OCI runtime exec failed/i.test(r.out)) {
+      if (/OCI runtime/i.test(r.out)) await docker(["rm", "-f", warmName(projectId)], 30_000);
       warm.delete(projectId);
       await ensureWarm(projectId);
       started = Date.now();
