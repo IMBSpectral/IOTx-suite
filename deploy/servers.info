@@ -1,0 +1,5 @@
+# Who each server is for. One line per server in servers.conf, fields separated by |:
+#   name | client | domain | droplet (name, IP) | region | size | apps switched off | live since | notes
+# deploy/ship.sh log (and every deploy) turns this plus git history into deploy/DEPLOYMENTS.md.
+imbspectral | ImbSpectral (own use, demos) | imbspectral.online | iotx-suite-1, 139.59.6.116 | Bangalore (blr1) | 4 CPU / 8 GB / 160 GB | none | 2026-10 | Insights runs here only
+iforge | iForge | iforge.online | atlas-iforge-1, 139.59.9.18 | Bangalore (blr1) | 4 CPU / 8 GB / 160 GB | insights (IOTX_DISABLED_APPS) | 2026-10 | hrm.iforge.online lives here

@@ -7,6 +7,7 @@
 #   deploy/ship.sh deploy <server> <change…>   add the changes to the line, build, deploy, check
 #   deploy/ship.sh revert <server> <change…>   undo changes on that server only, then deploy
 #   deploy/ship.sh redeploy <server>           deploy the line as it is (e.g. after a server rebuild)
+#   deploy/ship.sh log                         rewrite deploy/DEPLOYMENTS.md (servers, who they are for, every deploy)
 #
 # A change is a commit on main (its short hash, as status prints it). A change that needs an
 # earlier one that isn't on the server yet stops with "needs …": ship them together or not at all.
@@ -136,11 +137,22 @@ push_and_deploy() {
   done
   local code; code=$(curl -s -o /dev/null -w "%{http_code}" "$(url_of "$s")/login" || true)
   echo "✓ $s is on $tag (sign-in page answers $code)"
+  write_log
+}
+
+# Keep deploy/DEPLOYMENTS.md current: rewrite it and record it on main (it touches no app).
+write_log() {
+  fetch
+  bash deploy/log.sh >/dev/null || { echo "  (deployment log not updated)"; return; }
+  if ! git diff --quiet -- deploy/DEPLOYMENTS.md 2>/dev/null || [ -n "$(git ls-files --others -- deploy/DEPLOYMENTS.md)" ]; then
+    git add deploy/DEPLOYMENTS.md && git commit -q -m "Deployment log: $(git describe --tags --abbrev=0 --match "$s/*" "origin/release/$s" 2>/dev/null || echo update)" -- deploy/DEPLOYMENTS.md && echo "  log: deploy/DEPLOYMENTS.md updated"
+  fi
 }
 
 cmd=${1:-status}; shift || true
 case "$cmd" in
   status) status "${1:-}" ;;
+  log) fetch; bash deploy/log.sh ;;
   plan)
     s=${1:?server}; shift; fetch; apply "$s" "$@"
     echo "OK: these can go to $s. Nothing was deployed (deploy/ship.sh deploy $s $*)."
@@ -164,5 +176,5 @@ case "$cmd" in
   redeploy)
     s=${1:?server}; fetch; worktree "$s" >/dev/null
     FORCE_APPS=${FORCE_APPS:-web} push_and_deploy "$s" "$(git rev-parse "origin/$(branch_of "$s")")" ;;
-  *) sed -n '2,16p' "$0"; exit 1 ;;
+  *) sed -n '2,17p' "$0"; exit 1 ;;
 esac
