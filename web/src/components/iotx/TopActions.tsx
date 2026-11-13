@@ -148,6 +148,11 @@ function AccountMenu({ data, onDone }: { data: ShellData; onDone: () => void }) 
           <Icon name="sparkle" size={15} /> AI usage
         </TabLink>
       )}
+      {data.fleet && (
+        <TabLink href="/admin/deployments" className="ix-menuitem" onClick={onDone}>
+          <Icon name="globe" size={15} /> Deployments
+        </TabLink>
+      )}
       <button
         className="ix-menuitem"
         onClick={() => {
