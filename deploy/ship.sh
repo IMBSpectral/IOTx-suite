@@ -116,7 +116,8 @@ push_and_deploy() {
   local n=1 tag; while git rev-parse -q --verify "refs/tags/$s/$(date +%Y.%m.%d).$n" >/dev/null; do n=$((n + 1)); done
   tag="$s/$(date +%Y.%m.%d).$n"
   git -C "$dir" tag "$tag"
-  git -C "$dir" push -q origin "$b" "$tag"
+  # Both or neither: a label is never left behind for a line that didn't move.
+  git -C "$dir" push -q --atomic origin "$b" "$tag" || { git -C "$dir" tag -d "$tag" >/dev/null; die "couldn't push $b to GitHub; nothing was deployed to $s"; }
   local host; host=$(host_of "$s")
   for app in $apps; do
     local sub=$([ "$app" = web ] && echo web || echo apps/workspace)

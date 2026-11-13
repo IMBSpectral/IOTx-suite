@@ -42,6 +42,8 @@ change() { local h=$1 orig; orig=$(git log -1 --format=%B "$h" | sed -n 's/^(che
     tags=$(git tag --list "$s/*" --sort=-creatordate)
     [ -n "$tags" ] || echo "No deploys yet."
     for t in $tags; do
+      # Only labels on the server's release line were deployed; a run that failed before deploying can leave one behind.
+      git merge-base --is-ancestor "$t" "origin/release/$s" 2>/dev/null || continue
       prev=$(git describe --tags --abbrev=0 --match "$s/*" "$t^" 2>/dev/null || true)
       range=${prev:+$prev..}$t
       when=$(git log -1 --format='%ad' --date=format:'%Y-%m-%d %H:%M' "$t")
