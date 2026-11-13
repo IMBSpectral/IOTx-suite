@@ -928,3 +928,40 @@ input.ix-space-title:focus { border-color: var(--accent); outline: none; }
   .ix-files-nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--ix-line); }
   .ix-files-usage { margin-top: 0; width: 100%; }
 }
+
+/* Admin → Deployments (fleet): server cards, daily cost chart, per-server breakdown, deploy log. */
+.ix-fleet-servers { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.ix-fleet-server { display: flex; flex-direction: column; gap: 8px; }
+.ix-fleet-server h2 { display: flex; align-items: center; gap: 8px; font: 600 15px var(--font-sans); margin: 0; }
+.ix-fleet-domain { color: var(--accent); font-size: 13px; text-decoration: none; overflow-wrap: anywhere; }
+.ix-fleet-server dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 12.5px; }
+.ix-fleet-server dt { color: var(--ix-muted); }
+.ix-fleet-server dd { margin: 0; overflow-wrap: anywhere; }
+.ix-fleet-server .ix-btn { align-self: flex-start; }
+.ix-fleet-cost { font: 700 24px var(--font-sans); font-variant-numeric: tabular-nums; }
+.ix-fleet-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.ix-usage-bar.static { cursor: default; grid-template-columns: 1fr 64px; padding: 0; }
+.ix-usage-bar.static:hover { background: none; }
+.ix-fleet-detail .ix-usage-bar.static { grid-template-columns: 160px 1fr 70px 70px; padding: 3px 0; }
+.ix-fleet-chart h2, .ix-fleet-detail h3 { font: 600 13px var(--font-sans); margin: 0 0 10px; }
+.ix-fleet-chart { margin-bottom: 12px; }
+.ix-fleet-bars { display: flex; align-items: flex-end; gap: 3px; height: 160px; padding-top: 6px; }
+.ix-fleet-bars .col { flex: 1; min-width: 3px; height: 100%; display: flex; align-items: flex-end; }
+.ix-fleet-bars .stack { width: 100%; display: flex; flex-direction: column-reverse; border-radius: 3px 3px 0 0; overflow: hidden; min-height: 1px; }
+.ix-fleet-bars .stack i { display: block; min-height: 1px; }
+.ix-fleet-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 12px; align-items: center; }
+.ix-fleet-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.ix-fleet-detail { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+.ix-fleet-md { font-size: 13.5px; line-height: 1.55; overflow-x: auto; }
+.ix-fleet-md h2 { font: 600 17px var(--font-sans); margin: 22px 0 6px; padding-top: 14px; border-top: 1px solid var(--ix-line, rgba(127,127,127,.2)); }
+.ix-fleet-md h2:first-of-type { border-top: 0; padding-top: 0; }
+.ix-fleet-md h3 { font: 600 14px var(--font-sans); margin: 14px 0 6px; }
+.ix-fleet-md ul { margin: 4px 0 10px; padding-left: 20px; }
+.ix-fleet-md code { font-size: 12px; padding: 1px 5px; border-radius: 5px; background: var(--ix-hover); }
+.ix-fleet-md table { border-collapse: collapse; font-size: 12.5px; }
+.ix-fleet-md th, .ix-fleet-md td { border: 1px solid var(--ix-line, rgba(127,127,127,.25)); padding: 4px 8px; text-align: left; }
+@media (max-width: 640px) {
+  .ix-fleet-detail .ix-usage-bar.static { grid-template-columns: 110px 1fr 64px; }
+  .ix-fleet-detail .ix-usage-bar.static .sub { display: none; }
+  .ix-fleet-detail { grid-template-columns: 1fr; }
+}
