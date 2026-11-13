@@ -122,7 +122,7 @@ export default function ProjectMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-8 z-30 w-52 overflow-hidden rounded-xl border shadow-lg"
+          className="absolute left-0 top-8 z-30 w-52 overflow-hidden rounded-xl border shadow-lg"
           style={{ background: "var(--panel)" }}
         >
           {placing ? (
