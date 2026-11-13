@@ -4,6 +4,8 @@ import { currentWorkspace } from "../workspace";
 import { canManageRoles, effectiveForRequest } from "./permissions";
 import { loadAppearance } from "./appearance-server";
 import type { PermsData } from "@/components/iotx/PermsProvider";
+import { isPlatformAdmin } from "../platform-admin";
+import { isFleetControl } from "../fleet";
 
 /**
  * Everything the IOTx Suite shell needs for one request: who is signed in,
@@ -40,6 +42,8 @@ export const shellData = cache(async (userId: string, workspaceId?: string) => {
     workspace: { id: ws.id, name: ws.name, plan: ws.plan },
     workspaces: memberships.map((m) => ({ id: m.workspace.id, name: m.workspace.name, plan: m.workspace.plan, role: m.role })),
     recentChats: chats,
+    // Admin → Deployments (every server, its deploys and AI usage): the control server's platform admins.
+    fleet: isFleetControl() && isPlatformAdmin(user?.email),
   };
 });
 
