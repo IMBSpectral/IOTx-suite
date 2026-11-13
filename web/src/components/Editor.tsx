@@ -506,6 +506,50 @@ export default function Editor({
     return () => window.removeEventListener("keydown", close);
   }, [navOpen]);
   const [chatHidden, setChatHidden] = useState(false);
+  // Width of the chat column; the preview takes the rest. Dragged with the handle between them,
+  // remembered per browser.
+  const CHAT_DEFAULT = 420;
+  const [chatWidth, setChatWidth] = useState(CHAT_DEFAULT);
+  const [resizing, setResizing] = useState(false);
+  const clampChat = useCallback((w: number) => {
+    const max = typeof window === "undefined" ? 760 : Math.max(320, Math.min(760, Math.round(window.innerWidth * 0.6)));
+    return Math.round(Math.min(max, Math.max(320, w)));
+  }, []);
+  useEffect(() => {
+    try {
+      const saved = Number(localStorage.getItem("forge.chatWidth"));
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- read once from browser storage after mount
+      if (saved) setChatWidth(clampChat(saved));
+    } catch {}
+  }, [clampChat]);
+  const saveChatWidth = useCallback((w: number) => {
+    setChatWidth(w);
+    try {
+      localStorage.setItem("forge.chatWidth", String(w));
+    } catch {}
+  }, []);
+  const startResize = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startW = chatWidth;
+      let last = startW;
+      setResizing(true);
+      const move = (ev: PointerEvent) => {
+        last = clampChat(startW + ev.clientX - startX);
+        setChatWidth(last);
+      };
+      const up = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        setResizing(false);
+        saveChatWidth(last);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    },
+    [chatWidth, clampChat, saveChatWidth],
+  );
   const [moreOpen, setMoreOpen] = useState(false);
   const [draftsVersion, setDraftsVersion] = useState(0);
   const [runtimeError, setRuntimeError] = useState<{
@@ -1274,7 +1318,7 @@ export default function Editor({
       )}
 
       <header className="flex h-12 shrink-0 items-center gap-2 px-2">
-        <div className={`flex min-w-0 items-center gap-0.5 ${chatHidden ? "" : "w-[412px] shrink-0"}`}>
+        <div className={`flex min-w-0 items-center gap-0.5 ${chatHidden ? "" : "shrink-0"}`} style={chatHidden ? undefined : { width: chatWidth }}>
           {sidebar && (
             <IconButton label="Open sidebar" onClick={() => setNavOpen(true)}>
               <PanelLeft className="h-4 w-4" />
@@ -1421,7 +1465,7 @@ export default function Editor({
 
       <div className="flex min-h-0 flex-1 pb-2 pr-2">
       {/* Chat */}
-      <section className={`w-[420px] shrink-0 flex-col ${chatHidden ? "hidden" : "flex"}`}>
+      <section className={`shrink-0 flex-col ${chatHidden ? "hidden" : "flex"}`} style={{ width: chatWidth }}>
 
         <ChatSwitcher projectId={projectId} chatId={chatId} canEdit={access !== "view"} />
         <DraftBar
@@ -1619,6 +1663,31 @@ export default function Editor({
         )}
       </section>
 
+      {!chatHidden && (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize the chat and preview"
+          aria-valuenow={chatWidth}
+          aria-valuemin={320}
+          aria-valuemax={760}
+          tabIndex={0}
+          title="Drag to resize. Double-click to reset."
+          onPointerDown={startResize}
+          onDoubleClick={() => saveChatWidth(CHAT_DEFAULT)}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+              e.preventDefault();
+              saveChatWidth(clampChat(chatWidth + (e.key === "ArrowRight" ? 24 : -24)));
+            }
+          }}
+          className="group relative w-2 shrink-0 cursor-col-resize outline-none"
+        >
+          <span className={`absolute inset-y-8 left-1/2 w-1 -translate-x-1/2 rounded-full transition-colors group-hover:bg-[var(--accent)] group-focus-visible:bg-[var(--accent)] ${resizing ? "bg-[var(--accent)]" : "bg-transparent"}`} />
+        </div>
+      )}
+      {/* While dragging, the preview iframe would swallow the pointer: cover the page. */}
+      {resizing && <div className="fixed inset-0 z-50 cursor-col-resize" aria-hidden />}
       {/* Workspace */}
       <section
         className={`relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border shadow-sm ${chatHidden ? "ml-2" : ""}`}
