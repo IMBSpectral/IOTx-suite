@@ -40,7 +40,7 @@ fetch() { git fetch -q origin main 'refs/heads/release/*:refs/remotes/origin/rel
 # Commits on main whose change isn't on the server's line yet (cherry-picked ones count as there).
 pending() {
   local b; b=$(branch_of "$1")
-  git log --no-merges --cherry-pick --right-only --reverse --format='%h%x09%ad%x09%s' --date=short "origin/$b...origin/main" -- web apps/workspace
+  git log --no-merges --cherry-pick --right-only --reverse --format='%h%x09%ad%x09%s' --date=short "origin/$b...main" -- web apps/workspace
 }
 
 worktree() {

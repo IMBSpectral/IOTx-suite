@@ -32,7 +32,7 @@ change() { local h=$1 orig; orig=$(git log -1 --format=%B "$h" | sed -n 's/^(che
     echo
     echo "### Waiting to go to $s"
     echo
-    p=$(git log --no-merges --cherry-pick --right-only --reverse --format='%h|%ad|%s' --date=short "origin/release/$s...origin/main" -- web apps/workspace 2>/dev/null || true)
+    p=$(git log --no-merges --cherry-pick --right-only --reverse --format='%h|%ad|%s' --date=short "origin/release/$s...main" -- web apps/workspace 2>/dev/null || true)
     if [ -z "$p" ]; then echo "Nothing: $s has every change on main."; else
       echo "$p" | while IFS='|' read -r h d sub; do echo "- \`$h\` $d $sub"; done
     fi
