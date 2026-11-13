@@ -147,12 +147,21 @@ write_log() {
   if ! git diff --quiet -- deploy/DEPLOYMENTS.md 2>/dev/null || [ -n "$(git ls-files --others -- deploy/DEPLOYMENTS.md)" ]; then
     git add deploy/DEPLOYMENTS.md && git commit -q -m "Deployment log: $(git describe --tags --abbrev=0 --match "$s/*" "origin/release/$s" 2>/dev/null || echo update)" -- deploy/DEPLOYMENTS.md && echo "  log: deploy/DEPLOYMENTS.md updated"
   fi
+  upload_log
+}
+
+# The control server (FLEET_CONTROL, default imbspectral) shows the log at Admin → Deployments.
+upload_log() {
+  local c=${FLEET_CONTROL:-imbspectral} host dir
+  host=$(host_of "$c" 2>/dev/null) || return 0
+  dir=$(ssh -i "$KEY" -o ConnectTimeout=10 "root@$host" 'r=$(grep -h "^PROJECTS_ROOT=" /opt/iotx/web/.env 2>/dev/null | cut -d= -f2- | tr -d "\""); echo ${r:-/var/lib/iotx/projects}/_fleet' 2>/dev/null) || { echo "  (log not uploaded to $c)"; return 0; }
+  ssh -i "$KEY" "root@$host" "mkdir -p '$dir'" && scp -q -i "$KEY" deploy/DEPLOYMENTS.md deploy/servers.conf deploy/servers.info "root@$host:$dir/" && echo "  log: shown on $(url_of "$c")/admin/deployments" || echo "  (log not uploaded to $c)"
 }
 
 cmd=${1:-status}; shift || true
 case "$cmd" in
   status) status "${1:-}" ;;
-  log) fetch; bash deploy/log.sh ;;
+  log) fetch; bash deploy/log.sh; upload_log ;;
   plan)
     s=${1:?server}; shift; fetch; apply "$s" "$@"
     echo "OK: these can go to $s. Nothing was deployed (deploy/ship.sh deploy $s $*)."
