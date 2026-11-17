@@ -16,6 +16,8 @@ type Checks = { at: string; sha: string; checks: CheckRow[]; blocking: boolean }
 type Seo = { title?: string; description?: string; ogImage?: string; favicon?: string; pages?: Record<string, { title?: string; description?: string; ogImage?: string }> };
 
 export type PublishInfo = {
+  /** A publish running now (from this or another tab): which step it's on. */
+  publishing?: { step: string; startedAt: string } | null;
   published: boolean;
   upToDate: boolean;
   url: string | null;
@@ -54,7 +56,7 @@ const dot: Record<Status, string> = {
 
 /** The label the publish button shows, from the current state. */
 export function publishLabel(info: PublishInfo | null, busy: boolean) {
-  if (busy) return "Publishing…";
+  if (busy || info?.publishing) return "Publishing…";
   if (!info) return "Publish";
   if (info.requestedAt && info.requiresApproval) return "Awaiting approval";
   if (!info.published) return "Publish";
@@ -139,11 +141,24 @@ export default function PublishDialog({
   }, [load]);
 
   function close() {
-    // Reset the run state here rather than on open, so reopening starts clean.
-    setPhase("idle");
-    setError(null);
+    // Reset the run state here rather than on open, so reopening starts clean. A publish that is
+    // running keeps going: the button says "Publishing…" and reopening shows its progress.
+    if (phase !== "running") {
+      setPhase("idle");
+      setError(null);
+    }
     onClose();
   }
+
+  // A publish running elsewhere (another tab, or this one before a reload): follow it until it ends.
+  const remote = phase !== "running" && !!info?.publishing;
+  useEffect(() => {
+    if (!remote) return;
+    const t = setInterval(() => void load(), 3000);
+    return () => clearInterval(t);
+  }, [remote, load]);
+  const running = phase === "running" || remote;
+  const shownStep = phase === "running" ? step : (info?.publishing?.step ?? null);
 
   async function save(patch: Record<string, unknown>) {
     setSaving(true);
@@ -178,6 +193,8 @@ export default function PublishDialog({
     }
     setPhase("running");
     setStep("checking");
+    // The editor's button says "Publishing…" from now on, even with this dialog closed.
+    if (info) onInfo({ ...info, publishing: { step: "checking", startedAt: new Date().toISOString() } });
     const res = await fetch(`/api/projects/${projectId}/publish`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -276,11 +293,12 @@ export default function PublishDialog({
         <OpenDraftNote projectId={projectId} open={open} />
         <SetupReview projectId={projectId} open={open} />
 
-        {phase === "running" && (
+        {running && (
           <section className="px-5 py-4">
+            {remote && <p className="mb-2 text-xs" style={{ color: "var(--muted)" }}>Publishing now. You can close this; the button shows when it&apos;s done.</p>}
             <ol className="space-y-2">
               {STEPS.map((s, i) => {
-                const current = STEPS.findIndex((x) => x.id === step);
+                const current = STEPS.findIndex((x) => x.id === shownStep);
                 const state = i < current ? "done" : i === current ? "active" : "todo";
                 return (
                   <li key={s.id} className="flex items-center gap-2 text-sm">
@@ -559,7 +577,7 @@ export default function PublishDialog({
           <div className="flex items-center justify-between">
             <p className="text-xs font-medium">Checks</p>
             <button
-              disabled={phase === "running"}
+              disabled={running}
               onClick={() => void run("check")}
               className="text-[11px] hover:underline disabled:opacity-50"
               style={{ color: "var(--muted)" }}
@@ -628,11 +646,11 @@ export default function PublishDialog({
               </button>
             ) : (
               <button
-                disabled={phase === "running"}
+                disabled={running}
                 onClick={() => void run("publish")}
                 className="rounded-lg bg-[#6d4aff] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
               >
-                {phase === "running"
+                {running
                   ? "Publishing…"
                   : info?.requestedAt && info.canApprove
                     ? "Approve and publish"

@@ -145,8 +145,17 @@ async function POST_(req: Request, { params }: Ctx) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      const send = (data: unknown) =>
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+      // The page may close or reload mid-publish: progress then has nowhere to go, but the publish
+      // itself must carry on (the editor finds it again through GET publishing).
+      let gone = false;
+      const send = (data: unknown) => {
+        if (gone) return;
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+        } catch {
+          gone = true;
+        }
+      };
       const onStep = (step: StepId) => send({ type: "step", step });
       try {
         if (action === "check") {
@@ -179,7 +188,9 @@ async function POST_(req: Request, { params }: Ctx) {
             message: err instanceof Error ? err.message : "Publish failed",
           });
       } finally {
-        controller.close();
+        try {
+          controller.close();
+        } catch {}
       }
     },
   });
