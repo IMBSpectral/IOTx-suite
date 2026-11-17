@@ -26,6 +26,7 @@ import {
   RotateCw,
   Sun,
   Type,
+  Loader2,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import HistoryPanel from "./HistoryPanel";
@@ -1452,9 +1453,12 @@ export default function Editor({
               {perms.can("builder.publish") && (
                 <button
                   onClick={() => setPublishOpen(true)}
-                  className={`h-7 rounded-lg px-3 text-[13px] font-medium ${publishInfo?.upToDate ? "border" : "btn-primary"}`}
-                  style={publishInfo?.upToDate ? { background: "var(--panel)" } : undefined}
+                  title={publishInfo?.publishing ? "Publishing now. Click to see progress." : undefined}
+                  aria-busy={!!publishInfo?.publishing}
+                  className={`inline-flex h-7 items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium ${publishInfo?.upToDate && !publishInfo?.publishing ? "border" : "btn-primary"} ${publishInfo?.publishing ? "opacity-80" : ""}`}
+                  style={publishInfo?.upToDate && !publishInfo?.publishing ? { background: "var(--panel)" } : undefined}
                 >
+                  {publishInfo?.publishing && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
                   {publishLabel(publishInfo, false)}
                 </button>
               )}
