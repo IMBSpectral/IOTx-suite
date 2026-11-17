@@ -390,8 +390,34 @@ export async function runChecks(
   }
 }
 
-/** Run the checks and, if nothing blocks, put main live. */
+// Publishes in progress, per project: which step each is on. Kept outside the request so the
+// editor can show "Publishing…" after the dialog is closed or the page reloaded.
+const gp = globalThis as unknown as { __forgePublishing?: Map<string, { step: StepId; startedAt: string }> };
+const publishing = (gp.__forgePublishing ??= new Map());
+
+/** The publish running for a project now, if any. */
+export function publishInProgress(projectId: string) {
+  return publishing.get(projectId) ?? null;
+}
+
+export class PublishBusy extends Error {}
+
+/** Run the checks and, if nothing blocks, put main live. One publish per project at a time. */
 export async function publishProject(projectId: string, onStep?: (step: StepId) => void) {
+  if (publishing.has(projectId)) throw new PublishBusy("This app is already being published. It will be live in a moment.");
+  const entry = { step: "checking" as StepId, startedAt: new Date().toISOString() };
+  publishing.set(projectId, entry);
+  try {
+    return await publishSteps(projectId, (s) => {
+      entry.step = s;
+      onStep?.(s);
+    });
+  } finally {
+    publishing.delete(projectId);
+  }
+}
+
+async function publishSteps(projectId: string, onStep?: (step: StepId) => void) {
   onStep?.("checking");
   const result = await runChecks(projectId, onStep);
   if (result.blocking) throw new PublishBlocked(result);
@@ -453,6 +479,8 @@ export async function publishState(projectId: string) {
     seo: (project.seo as Seo | null) ?? {},
     lastChecks: (project.lastChecks as ChecksResult | null) ?? null,
     requestedAt: project.publishRequestedAt,
+    // A publish running now (from this or another tab, or the API): which step it's on.
+    publishing: publishInProgress(projectId),
   };
 }
 
