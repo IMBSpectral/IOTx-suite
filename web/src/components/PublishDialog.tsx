@@ -28,6 +28,8 @@ export type PublishInfo = {
   entitlements?: { hideBadge: boolean; customDomain: boolean; plan: string };
   seo: Seo;
   lastChecks: Checks | null;
+  /** The accepted version publishing would put live; checks run on another version are out of date. */
+  mainSha?: string | null;
   requestedAt: string | null;
   requiresApproval: boolean;
   canApprove: boolean;
@@ -588,6 +590,15 @@ export default function PublishDialog({
           {!checks && (
             <p className="mt-1 text-[11px]" style={{ color: "var(--muted)" }}>
               Build, security, dependency and SEO checks run before every publish.
+            </p>
+          )}
+          {checks && info?.mainSha && checks.sha !== info.mainSha && !running && (
+            <p className="mt-1 rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+              These results are for an earlier version; the app has changed since, and problems below may already be fixed.
+              Publishing checks the latest version again.{" "}
+              <button onClick={() => void run("check")} className="underline">
+                Check the latest version
+              </button>
             </p>
           )}
           <ul className="mt-2 space-y-1">
