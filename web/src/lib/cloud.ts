@@ -937,9 +937,10 @@ export const cloud = {
     },
   },
   ai: {
-    /** Chat with an AI model through Forge. "fast" is cheaper; "smart" is better at hard tasks. */
+    /** Chat with an AI model through Forge. "fast" is cheaper; "smart" is better at hard tasks. Content is text, or text
+     *  and images: [{ type: "text", text }, { type: "image", url: "data:image/png;base64,…" | "https://…" }]. */
     async chat(
-      messages: { role: "user" | "assistant"; content: string }[],
+      messages: { role: "user" | "assistant"; content: string | ({ type: "text"; text: string } | { type: "image"; url: string })[] }[],
       opts: { system?: string; model?: "fast" | "smart"; maxTokens?: number } = {},
     ): Promise<string> {
       const r = await call<{ text: string }>("/ai/chat", { method: "POST", body: JSON.stringify({ messages, ...opts }) });
