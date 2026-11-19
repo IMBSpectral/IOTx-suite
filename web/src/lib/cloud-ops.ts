@@ -261,20 +261,95 @@ const anthropic = new Anthropic({ ...(workspaceHeader ? { defaultHeaders: { "ant
 const MODELS = { fast: "claude-haiku-5-5", smart: "claude-sonnet-5-5" } as const;
 const aiMinute = new Map<string, { at: number; n: number }>();
 
+const MAX_IMAGES = 10;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
+type ImageType = (typeof IMAGE_TYPES)[number];
+type ClaudePart = Anthropic.TextBlockParam | Anthropic.ImageBlockParam;
+type ClaudeMessage = { role: "user" | "assistant"; content: string | ClaudePart[] };
+
+/** One image part, in any of the shapes apps send, as Claude's image block. */
+function toImage(p: Record<string, unknown>): Anthropic.ImageBlockParam {
+  const bad = (why: string) => new CloudError(`An image couldn't be used: ${why}`);
+  // OpenAI style { type: "image_url", image_url: { url } } or { image_url: "…" }; plain { type: "image", url | data }.
+  const iu = p.image_url as { url?: unknown } | string | undefined;
+  let url = typeof iu === "string" ? iu : typeof iu?.url === "string" ? iu.url : typeof p.url === "string" ? p.url : null;
+  let data: string | null = typeof p.data === "string" ? p.data : null;
+  let mediaType = typeof p.media_type === "string" ? p.media_type : typeof p.mediaType === "string" ? p.mediaType : null;
+  // Claude style { type: "image", source: { type: "base64", media_type, data } | { type: "url", url } }.
+  const src = p.source as { type?: unknown; media_type?: unknown; data?: unknown; url?: unknown } | undefined;
+  if (src && typeof src === "object") {
+    if (src.type === "url" && typeof src.url === "string") url = src.url;
+    if (typeof src.data === "string") data = src.data;
+    if (typeof src.media_type === "string") mediaType = src.media_type;
+  }
+  if (url?.startsWith("data:")) {
+    const m = /^data:([^;,]+);base64,([\s\S]*)$/.exec(url);
+    if (!m) throw bad("it isn't a base64 data URL.");
+    mediaType = m[1];
+    data = m[2];
+    url = null;
+  }
+  if (url) {
+    if (!/^https:\/\//i.test(url)) throw bad("links must start with https://.");
+    return { type: "image", source: { type: "url", url } };
+  }
+  if (!data) throw bad("send it as a data URL, base64 data or an https link.");
+  data = data.replace(/\s+/g, "");
+  if (mediaType === "image/jpg") mediaType = "image/jpeg";
+  if (!mediaType || !(IMAGE_TYPES as readonly string[]).includes(mediaType)) throw bad("use JPEG, PNG, GIF or WebP.");
+  if (Math.floor((data.length * 3) / 4) > MAX_IMAGE_BYTES) throw bad("it's larger than 5 MB; shrink it first.");
+  return { type: "image", source: { type: "base64", media_type: mediaType as ImageType, data } };
+}
+
+/** Apps' messages (text, or text and image parts) as Claude messages, with their text length and image count. */
+function toClaudeMessages(raw: unknown[]): { messages: ClaudeMessage[]; total: number; images: number } {
+  let total = 0;
+  let images = 0;
+  const messages = raw.map((m0): ClaudeMessage => {
+    const m = (m0 ?? {}) as { role?: unknown; content?: unknown };
+    if (m.role !== "user" && m.role !== "assistant") throw new CloudError("Each message needs a role: user or assistant.");
+    if (typeof m.content === "string") {
+      if (!m.content.trim()) throw new CloudError("A message is empty.");
+      total += m.content.length;
+      return { role: m.role, content: m.content };
+    }
+    if (!Array.isArray(m.content) || !m.content.length) throw new CloudError("Each message needs text, or a list of text and image parts.");
+    const parts: ClaudePart[] = m.content.map((p0) => {
+      const p = (p0 ?? {}) as Record<string, unknown>;
+      if (p.type === "text" || p.type === "input_text") {
+        const text = typeof p.text === "string" ? p.text : "";
+        total += text.length;
+        return { type: "text" as const, text };
+      }
+      if (p.type === "image" || p.type === "image_url" || p.type === "input_image") {
+        if (m.role !== "user") throw new CloudError("Only user messages can carry images.");
+        images++;
+        return toImage(p);
+      }
+      throw new CloudError(`A message part has an unknown type (${String(p.type)}). Use text or image.`);
+    }).filter((p) => p.type !== "text" || p.text.trim());
+    if (!parts.length) throw new CloudError("A message is empty.");
+    return { role: m.role, content: parts };
+  });
+  return { messages, total, images };
+}
+
 export async function aiChat(projectId: string, cfg: CloudConfig, body: unknown) {
   if (cfg.ai?.enabled === false) throw new CloudError("AI is turned off for this app.", 403);
   const b = (body ?? {}) as { messages?: unknown; system?: unknown; model?: unknown; maxTokens?: unknown };
-  const messages = Array.isArray(b.messages) ? b.messages : [];
-  if (!messages.length || messages.length > 50) throw new CloudError("Send between 1 and 50 messages.");
-  let total = 0;
-  for (const m of messages as { role?: unknown; content?: unknown }[]) {
-    if ((m.role !== "user" && m.role !== "assistant") || typeof m.content !== "string" || !m.content.trim()) {
-      throw new CloudError("Each message needs a role (user or assistant) and text content.");
-    }
-    total += m.content.length;
-  }
-  if ((messages[0] as { role: string }).role !== "user") throw new CloudError("The first message must be from the user.");
+  const raw = Array.isArray(b.messages) ? b.messages : [];
+  if (!raw.length || raw.length > 50) throw new CloudError("Send between 1 and 50 messages.");
+  // Content is text, or a list of parts: text plus images (screenshots, photos, scanned documents).
+  const { messages, total, images } = toClaudeMessages(raw);
+  if (messages[0].role !== "user") throw new CloudError("The first message must be from the user.");
   if (total > 100_000) throw new CloudError("The conversation is too long.");
+  if (images > MAX_IMAGES) throw new CloudError(`Send at most ${MAX_IMAGES} images at a time.`);
+  // What the AI log keeps: the words, with each image as a placeholder (images aren't stored).
+  const logged = messages.map((m) => ({
+    role: m.role,
+    content: typeof m.content === "string" ? m.content : m.content.map((c) => (c.type === "text" ? c.text : "[image]")).join("\n"),
+  }));
   const system = typeof b.system === "string" ? b.system.slice(0, 10_000) : undefined;
   const model = MODELS[b.model === "smart" ? "smart" : "fast"];
   const maxTokens = Math.min(4096, Math.max(16, Number(b.maxTokens) || 1024));
@@ -303,14 +378,14 @@ export async function aiChat(projectId: string, cfg: CloudConfig, body: unknown)
       model,
       max_tokens: maxTokens,
       ...(system ? { system } : {}),
-      messages: messages as { role: "user" | "assistant"; content: string }[],
+      messages,
     });
   } catch (e) {
     await recordAiRun(
       projectId,
       cfg,
       { model: label, status: 502, ms: Date.now() - started, input_tokens: 0, output_tokens: 0, credits: 0, error: e instanceof Error ? e.message.slice(0, 500) : String(e) },
-      { request: { system, messages }, response: null },
+      { request: { system, messages: logged }, response: null },
     );
     throw new CloudError("The AI model didn't answer. Try again.", 502);
   }
@@ -320,7 +395,7 @@ export async function aiChat(projectId: string, cfg: CloudConfig, body: unknown)
     projectId,
     cfg,
     { model: label, status: 200, ms: Date.now() - started, input_tokens: res.usage.input_tokens, output_tokens: res.usage.output_tokens, credits, error: null },
-    { request: { system, messages }, response: text },
+    { request: { system, messages: logged }, response: text },
   );
   await charge(p.workspaceId, credits, "GENERATION", undefined, { category: "cloud", projectId });
   await bumpUsage(projectId, { aiCalls: 1, aiCredits: credits });
