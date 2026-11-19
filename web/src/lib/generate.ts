@@ -1099,6 +1099,8 @@ function buildTools(projectId: string, onFile: (e: BuildEvent) => void, userId: 
             : `Create tables with create_migration (SQLite SQL). Tables with a user_id TEXT column get it filled from the signed-in user. `) +
           `Default access: read public, write authenticated; change it with set_table_access. ` +
           `AI: await cloud.ai.generate(prompt, { system?, model?: "fast" | "smart" }) or cloud.ai.chat(messages, opts) returns text; ` +
+          `to read images (screenshots, photos, scanned forms), give a user message content parts: [{ type: "text", text }, { type: "image", url: dataUrlOrHttpsUrl }] ` +
+          `(JPEG, PNG, GIF or WebP, up to 5 MB each and 10 per call; shrink large photos first) and use model "smart"; ` +
           `it is billed to the workspace's credits, so call it on user action, never in a render loop. ` +
           `Email: await cloud.email.send({ to, subject, text?, html? }) needs a signed-in user and ` +
           `lands in the Cloud outbox until an email key is added. ` +
