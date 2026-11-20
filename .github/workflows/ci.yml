@@ -1,0 +1,60 @@
+name: CI
+
+# Checks only. No secrets are used here, so this is safe to run on pull
+# requests from forks.
+on:
+  push:
+    branches: [main]
+    paths: ['web/**', 'apps/workspace/**', '.github/workflows/ci.yml']
+  pull_request:
+    paths: ['web/**', 'apps/workspace/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: ${{ matrix.app }} — lint & types
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: web
+            dir: web
+          - app: workspace
+            dir: apps/workspace
+    env:
+      # prisma generate needs the datasource URL to exist; it never connects.
+      DATABASE_URL: postgresql://placeholder:placeholder@127.0.0.1:5432/placeholder
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ matrix.dir }}/package-lock.json
+
+      - name: Install
+        working-directory: ${{ matrix.dir }}
+        run: npm ci --no-audit --no-fund
+
+      - name: Prisma client
+        working-directory: ${{ matrix.dir }}
+        run: npx prisma generate
+
+      - name: Typecheck
+        working-directory: ${{ matrix.dir }}
+        run: npx tsc --noEmit
+
+      - name: Lint
+        working-directory: ${{ matrix.dir }}
+        run: npx eslint . --max-warnings=0
+        continue-on-error: true
