@@ -35,6 +35,9 @@ const SOURCES: Record<string, { from: "suite" | "workspace"; label?: string }> =
   docs: { from: "suite" },
   slides: { from: "suite" },
   read: { from: "suite" },
+  files: { from: "suite" },
+  gdrive: { from: "suite" },
+  insights: { from: "suite", label: "Insights analyses" },
   chat: { from: "suite", label: "AI chats" },
   people: { from: "suite", label: "People" },
 };

@@ -225,6 +225,71 @@ export type DriveFile = {
 /** Sort orders for the file list, as Google's home screens offer them. */
 const ORDERS: Record<string, string> = { opened: "viewedByMeTime desc", modifiedByMe: "modifiedByMeTime desc", modified: "modifiedTime desc", name: "name_natural" };
 
+export type DriveItem = {
+  id: string;
+  name: string;
+  mimeType: string;
+  modifiedTime: string;
+  size?: string;
+  webViewLink?: string;
+  iconLink?: string;
+  thumbnailLink?: string;
+  starred?: boolean;
+  owners?: { displayName?: string }[];
+};
+
+/**
+ * The Google Drive app: a folder (My Drive's top is "root"), Shared with me, Recent, Starred, or a
+ * search across the whole Drive. Folders first, then files by name (Recent: most recently used).
+ */
+export async function driveList(userId: string, q: { view?: string; folder?: string | null; search?: string; pageToken?: string }) {
+  const parts = ["trashed=false"];
+  const search = q.search?.trim().slice(0, 100);
+  let orderBy = "folder,name_natural";
+  if (search) {
+    parts.push(`(name contains '${search.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}' or fullText contains '${search.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}')`);
+    orderBy = "";
+  } else if (q.folder) {
+    parts.push(`'${q.folder.replace(/[^\w-]/g, "")}' in parents`);
+  } else if (q.view === "shared") {
+    parts.push("sharedWithMe");
+    orderBy = "sharedWithMeTime desc";
+  } else if (q.view === "recent") {
+    parts.push(`mimeType != '${FOLDER}'`);
+    orderBy = "viewedByMeTime desc";
+  } else if (q.view === "starred") {
+    parts.push("starred");
+  } else {
+    parts.push("'root' in parents");
+  }
+  const p = new URLSearchParams({
+    q: parts.join(" and "),
+    pageSize: "100",
+    fields: "nextPageToken, files(id, name, mimeType, modifiedTime, size, webViewLink, iconLink, thumbnailLink, starred, owners(displayName))",
+    supportsAllDrives: "true",
+    includeItemsFromAllDrives: "true",
+    ...(orderBy ? { orderBy } : {}),
+    ...(q.pageToken ? { pageToken: q.pageToken } : {}),
+  });
+  return gapi<{ files: DriveItem[]; nextPageToken?: string }>(userId, `https://www.googleapis.com/drive/v3/files?${p}`);
+}
+
+/** A folder's path from My Drive down to it, for breadcrumbs (stops at 10 levels or a shared folder). */
+export async function driveCrumbs(userId: string, folderId: string) {
+  const out: { id: string; name: string }[] = [];
+  let at: string | undefined = folderId;
+  for (let i = 0; at && i < 10; i++) {
+    const f: { id: string; name: string; parents?: string[] } | null = await gapi<{ id: string; name: string; parents?: string[] }>(
+      userId,
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(at)}?fields=id,name,parents&supportsAllDrives=true`,
+    ).catch(() => null);
+    if (!f || !f.parents?.length) break;
+    out.unshift({ id: f.id, name: f.name });
+    at = f.parents[0];
+  }
+  return out;
+}
+
 /** The person's Docs, Sheets or Slides, newest first, with optional name search, sort and owner filter. */
 export async function listFiles(userId: string, kind: Kind, search?: string, pageToken?: string, opts: { order?: string; owner?: "me" | "notme" | "" } = {}) {
   const qParts = [`mimeType='${KINDS[kind].mime}'`, "trashed=false"];
@@ -244,7 +309,7 @@ export async function listFiles(userId: string, kind: Kind, search?: string, pag
 }
 
 export async function fileMeta(userId: string, id: string) {
-  return gapi<DriveFile & { mimeType: string }>(userId, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?fields=id,name,mimeType,modifiedTime,webViewLink&supportsAllDrives=true`);
+  return gapi<DriveFile & { mimeType: string; size?: string; parents?: string[] }>(userId, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?fields=id,name,mimeType,modifiedTime,webViewLink,size,parents&supportsAllDrives=true`);
 }
 
 /** Tabs of a spreadsheet. */

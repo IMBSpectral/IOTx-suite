@@ -644,7 +644,23 @@ export default function Editor({
       }
 
       // @ references from the suite-wide picker (a task, a channel, a sheet…), read now as this person.
-      if (typed.includes("[@")) prompt += refsBlock(await readRefs(typed));
+      // Files from Files or Google Drive come in as attachments instead, so the agent has the file
+      // itself (an image to put in the app, a spreadsheet to read), not only its text.
+      if (typed.includes("[@")) {
+        const fileLinks = [...typed.matchAll(/\[@[^\]\n]{1,200}\]\((\/(?:drive|gdrive)\?[^)\s]+)\)/g)].map((m) => m[1]);
+        if (fileLinks.length) {
+          const r = await fetch(`/api/projects/${projectId}/uploads`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ refs: fileLinks }),
+          }).catch(() => null);
+          const d = (r?.ok ? await r.json().catch(() => null) : null) as { attachments?: Attachment[]; errors?: { error: string }[] } | null;
+          if (d?.attachments?.length) attachments = [...attachments, ...d.attachments];
+          if (d?.errors?.length) prompt += `\n\nSome referenced files couldn't be attached: ${d.errors.map((e) => e.error).join("; ")}`;
+        }
+        const refs = (await readRefs(typed)).filter((x) => !/^\/(drive|gdrive)\?/.test(x.url));
+        if (refs.length) prompt += refsBlock(refs);
+      }
 
       setSelected(null);
       // A new turn supersedes whatever the preview last reported.
