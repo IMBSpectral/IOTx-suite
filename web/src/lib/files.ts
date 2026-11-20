@@ -317,6 +317,22 @@ function stream(item: NonNullable<Item>, inline: boolean) {
   });
 }
 
+/** One file or folder, for opening it from a link (an @ reference). */
+export async function itemInfo(userId: string, workspaceId: string, id: string) {
+  const { item, access } = await load(userId, workspaceId, id, "view");
+  return dto(item, access);
+}
+
+/** A file's bytes for the AI or the Builder (an @ reference), with the same access check as a download. */
+export async function fileBytes(userId: string, workspaceId: string, id: string): Promise<{ name: string; type: string; data: Buffer }> {
+  const { item } = await load(userId, workspaceId, id, "view");
+  if (item.kind !== "file") throw new PermissionError("That's a folder; mention a file inside it.");
+  const file = path.join(FILES_ROOT, item.storageKey ?? "");
+  if (!item.storageKey || !file.startsWith(FILES_ROOT) || !fs.existsSync(file)) throw new PermissionError("The file's contents are missing.", 410);
+  if (Number(item.size) > 20 * 1024 * 1024) throw new PermissionError("Files can be up to 20 MB to read here.", 413);
+  return { name: item.name, type: item.mime || "application/octet-stream", data: await fsp.readFile(file) };
+}
+
 export async function download(userId: string, workspaceId: string, id: string, inline: boolean) {
   const { item } = await load(userId, workspaceId, id, "view");
   if (item.kind !== "file") throw new PermissionError("Folders can't be downloaded yet; open it and download the files.");

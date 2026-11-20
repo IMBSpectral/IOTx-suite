@@ -9,6 +9,7 @@ import {
   Loader2, Maximize2, MessageSquare, MoreHorizontal, Network, Plus, Search, Send, Sparkles, Table2, Trash2, TrendingDown, TrendingUp, Upload, X,
 } from "lucide-react";
 import Chart from "./Chart";
+import { readRefs, refsBlock, withoutRefs } from "../iotx/ai";
 import DataMap, { type MapLink } from "./DataMap";
 import { chartHeight, fmt, isIdName, isNumType, label, type Data, type Widget } from "./chart-options";
 import "./insights.css";
@@ -298,7 +299,27 @@ function Workspace({ a, setA, onBack, autoStart, clearAutoStart }: { a: Analysis
     let finished = false;
     let serverError: string | null = null;
     try {
-      const r = await fetch(`/api/insights/${cur.id}/chat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
+      // Suite-wide @: files from Files or Google Drive join the analysis as data; anything else
+      // (a task, a doc, a project…) is read now, as this person, and goes to the analyst as context.
+      let ask = text;
+      if (text.includes("[@")) {
+        const fileLinks = [...text.matchAll(/\[@[^\]\n]{1,200}\]\((\/(?:drive|gdrive)\?[^)\s]+)\)/g)].map((m) => m[1]);
+        if (fileLinks.length) {
+          state.steps.push("Adding the files you mentioned");
+          setLive({ ...state, steps: [...state.steps] });
+          const fr = await fetch(`/api/insights/${cur.id}/files`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ refs: fileLinks }) }).catch(() => null);
+          const fd = (fr ? await fr.json().catch(() => null) : null) as { analysis?: Analysis; errors?: string[]; error?: string } | null;
+          if (fd?.analysis) {
+            working = { ...fd.analysis, chat: working.chat };
+            setA(working);
+          }
+          const errs = fd?.errors?.length ? fd.errors : fd?.error ? [fd.error] : [];
+          if (errs.length) ask += `\n\n(Some mentioned files couldn't be added: ${errs.join("; ")})`;
+        }
+        const refs = (await readRefs(text)).filter((x) => !/^\/(drive|gdrive)\?/.test(x.url));
+        if (refs.length) ask += refsBlock(refs);
+      }
+      const r = await fetch(`/api/insights/${cur.id}/chat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: ask }) });
       if (!r.ok || !r.body) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error || "The analyst couldn't start.");
       const reader = r.body.getReader();
       const dec = new TextDecoder();
@@ -1223,7 +1244,7 @@ function ChatPanel({ a, live, questions, onSend, onClose }: { a: Analysis; live:
           <div key={i} className={`ins-msg ${m.role}`}>
             {m.role === "assistant" && m.steps && m.steps.length > 0 && <Steps steps={m.steps} />}
             <div className="ins-msg-text">
-              {m.role === "assistant" ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.text}</ReactMarkdown> : m.text}
+              {m.role === "assistant" ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.text}</ReactMarkdown> : withoutRefs(m.text)}
             </div>
           </div>
         ))}
