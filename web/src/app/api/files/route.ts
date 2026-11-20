@@ -7,6 +7,7 @@ import * as files from "@/lib/files";
  * Files.
  *   GET ?view=mine|shared|trash&folder=&search=   -> { items, crumbs, access, usage }
  *   GET ?shares=<id>                              -> { shares }       (the owner)
+ *   GET ?item=<id>                                -> { item }         (one file or folder, to open it from a link)
  *   GET ?admin=1                                  -> storage limits and use per person (owners, admins)
  *   POST { action: "folder", name, parentId? } | { action: "rename", id, name } | { action: "move", id, parentId }
  *        { action: "trash" | "restore" | "delete", id } | { action: "emptyTrash" }
@@ -26,6 +27,7 @@ async function GET_(req: Request) {
   try {
     if (q.get("admin")) return Response.json(await files.storageAdmin(user.id, ws.id));
     if (q.get("shares")) return Response.json({ shares: await files.sharesOf(user.id, ws.id, q.get("shares")!) });
+    if (q.get("item")) return Response.json({ item: await files.itemInfo(user.id, ws.id, q.get("item")!) });
     const [list, usage] = await Promise.all([
       files.listFiles(user.id, ws.id, { view: q.get("view") ?? "mine", folder: q.get("folder"), search: q.get("search") ?? undefined }),
       files.usage(user.id, ws.id),

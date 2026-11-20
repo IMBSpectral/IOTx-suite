@@ -9,13 +9,15 @@ import { docText, slidesText } from "@/lib/suite-ai";
 import * as kb from "@/lib/kb";
 import * as g from "@/lib/google";
 import * as spaces from "@/lib/spaces";
+import { bytesToText, fileRef, refBytes } from "@/lib/ref-files";
+import { getAnalysis, listAnalyses } from "@/lib/insights/store";
 
 /**
  * The suite's global @ picker, for the apps that live in this server (the
  * Workspace apps answer at /workspace/api/mentions). Only what the person can
  * already open.
- *   GET ?app=builder|spaces|sheets|docs|slides|read|chat|mail|people&q=  -> { items }
- *   GET ?ref=/projects/<id> (or /spaces/…, /sheets/…, /docs/…, /slides/…, /knowledge?doc=…, /home/chat?chat=…)
+ *   GET ?app=builder|spaces|sheets|docs|slides|read|files|gdrive|insights|chat|mail|people&q=  -> { items }
+ *   GET ?ref=/projects/<id> (or /spaces/…, /sheets/…, /docs/…, /slides/…, /knowledge?doc=…, /drive?file=…, /gdrive?file=…, /insights?a=…, /home/chat?chat=…)
  *                                                                        -> { title, text } for the AI
  */
 
@@ -71,6 +73,28 @@ async function GET_(req: Request) {
       select: { id: true, title: true, updatedAt: true },
     });
     items = rows.map((c) => ({ id: c.id, label: c.title, sub: `AI chat · ${c.updatedAt.toISOString().slice(0, 10)}`, url: `/home/chat?chat=${c.id}`, kind: "item" }));
+  } else if (app === "files" && opens("files")) {
+    // Their own files and files shared with them, most recent first.
+    const sharedIds = (await db.fileShare.findMany({ where: { kind: "user", userId: user.id }, select: { fileId: true } })).map((x) => x.fileId);
+    const rows = await db.fileItem.findMany({
+      where: { workspaceId: ws.id, trashedAt: null, kind: "file", OR: [{ ownerId: user.id }, { id: { in: sharedIds } }], ...(q ? { name: like } : {}) },
+      orderBy: { updatedAt: "desc" },
+      take: 25,
+      select: { id: true, name: true, size: true, updatedAt: true },
+    });
+    items = rows.map((f) => ({ id: f.id, label: f.name, sub: `Files · ${f.updatedAt.toISOString().slice(0, 10)}`, url: `/drive?file=${f.id}`, kind: "item" }));
+  } else if (app === "gdrive" && opens("gdrive")) {
+    const d = await g.driveList(user.id, q ? { search: q } : { view: "recent" }).catch(() => ({ files: [] as g.DriveItem[] }));
+    items = d.files
+      .filter((f) => f.mimeType !== "application/vnd.google-apps.folder")
+      .slice(0, 25)
+      .map((f) => ({ id: f.id, label: f.name, sub: `Google Drive · ${f.modifiedTime.slice(0, 10)}`, url: `/gdrive?file=${f.id}`, kind: "item" }));
+  } else if (app === "insights" && opens("insights")) {
+    const list = await listAnalyses(ws.id, user.id).catch(() => []);
+    items = list
+      .filter((a) => !q || a.name.toLowerCase().includes(q.toLowerCase()))
+      .slice(0, 25)
+      .map((a) => ({ id: a.id, label: a.name, sub: `${a.tables.length} tables · ${a.board.length} charts`, url: `/insights?a=${a.id}`, kind: "item" }));
   } else if (app === "mail" || app === "people") {
     const rows = await db.membership.findMany({
       where: { workspaceId: ws.id, ...(q ? { user: { OR: [{ name: like }, { email: like }] } } : {}) },
@@ -124,6 +148,22 @@ async function GET_(req: Request) {
     if (path.startsWith("/knowledge") && u.searchParams.get("doc") && opens("read")) {
       const d = await kb.getDoc(await kb.viewer(user.id, ws.id), u.searchParams.get("doc")!);
       return { title: d.title, text: `Knowledge article "${d.title}":\n${d.body.slice(0, 30_000)}` };
+    }
+    // A file in Files or in their Google Drive: its text (Word, Excel, PowerPoint and PDF converted).
+    const fr = fileRef(path + u.search);
+    if (fr && opens(fr.where)) {
+      const f = await refBytes(user.id, ws.id, fr);
+      const where = fr.where === "files" ? "Files" : "Google Drive";
+      return { title: f.name, text: `File "${f.name}" from ${where} (${f.type}, ${Math.round(f.data.length / 1024)} KB):\n${(await bytesToText(f)).slice(0, 30_000)}` };
+    }
+    if (path.startsWith("/insights") && u.searchParams.get("a") && opens("insights")) {
+      const a = await getAnalysis(ws.id, user.id, u.searchParams.get("a")!);
+      const tables = a.tables.map((t) => `- ${t.name} (${t.rows.toLocaleString()} rows): ${t.columns.map((c) => `${c.name} ${c.type}`).join(", ")}`).join("\n");
+      const board = a.board.map((w) => `- [${w.kind}] ${w.title}${w.insight ? `: ${w.insight}` : ""}`).join("\n");
+      return {
+        title: a.name,
+        text: `Insights analysis "${a.name}" (files: ${a.sources.map((s) => s.name).join(", ") || "none"}).\nTables:\n${tables || "(none)"}\nBoard:\n${board || "(empty)"}\n${a.questions?.length ? `Suggested questions: ${a.questions.join(" | ")}` : ""}`.slice(0, 30_000),
+      };
     }
     if (path.startsWith("/home/chat") && u.searchParams.get("chat")) {
       const c = await db.workspaceChat.findFirst({ where: { id: u.searchParams.get("chat")!, userId: user.id, workspaceId: ws.id } });

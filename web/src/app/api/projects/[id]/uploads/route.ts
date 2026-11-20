@@ -1,4 +1,5 @@
-import { requireUser, requireProject } from "@/lib/workspace";
+import { requireUser, requireProject, currentWorkspace } from "@/lib/workspace";
+import { fileRef, refBytes } from "@/lib/ref-files";
 import { listUploads, saveUpload, MAX_UPLOAD_BYTES } from "@/lib/uploads";
 import { route } from "@/lib/route";
 
@@ -7,6 +8,26 @@ async function POST_(req: Request, { params }: { params: Promise<{ id: string }>
   const { id } = await params;
   const user = await requireUser();
   await requireProject(user.id, id, "edit");
+
+  // Files @-mentioned from Files or Google Drive: copied in as attachments, so the agent gets the
+  // file itself (images to use in the app, spreadsheets to read), read as the person who mentioned it.
+  if ((req.headers.get("content-type") ?? "").includes("application/json")) {
+    const b = (await req.json().catch(() => ({}))) as { refs?: unknown };
+    const refs = (Array.isArray(b.refs) ? b.refs : []).map((r) => fileRef(String(r))).filter((r): r is NonNullable<ReturnType<typeof fileRef>> => !!r).slice(0, 10);
+    const ws = await currentWorkspace(user.id);
+    const attachments = [];
+    const errors: { ref: string; error: string }[] = [];
+    for (const r of refs) {
+      try {
+        const f = await refBytes(user.id, ws.id, r);
+        if (f.data.length > MAX_UPLOAD_BYTES) throw new Error(`${f.name} is larger than 20 MB`);
+        attachments.push(await saveUpload(id, { name: f.name, type: f.type, bytes: f.data }));
+      } catch (e) {
+        errors.push({ ref: `${r.where}:${r.id}`, error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+    return Response.json({ attachments, errors });
+  }
 
   const form = await req.formData().catch(() => null);
   const files = (form?.getAll("file") ?? []).filter((f): f is File => f instanceof File);
