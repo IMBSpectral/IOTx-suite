@@ -7,7 +7,7 @@ import Shell from "@/components/iotx/Shell";
 import FilesApp from "@/components/iotx/FilesApp";
 
 /** Files: the company's own file storage. */
-export default async function DrivePage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+export default async function DrivePage({ searchParams }: { searchParams: Promise<{ view?: string; file?: string }> }) {
   const session = await auth();
   const userId = session!.user!.id;
   const data = await shellData(userId);
@@ -15,11 +15,11 @@ export default async function DrivePage({ searchParams }: { searchParams: Promis
   if (!data.perms?.apps.includes("files")) redirect("/home");
   const ws = await currentWorkspace(userId);
   const m = await db.membership.findUnique({ where: { userId_workspaceId: { userId, workspaceId: ws.id } }, select: { role: true } });
-  const { view } = await searchParams;
+  const { view, file } = await searchParams;
   return (
     <main className="app-editor flex-1" style={{ minWidth: 0 }}>
       <Shell data={data} active="files">
-        <FilesApp admin={m?.role === "OWNER" || m?.role === "ADMIN"} initialView={view === "shared" || view === "trash" ? view : "mine"} />
+        <FilesApp admin={m?.role === "OWNER" || m?.role === "ADMIN"} initialView={view === "shared" || view === "trash" ? view : "mine"} initialFile={file} />
       </Shell>
     </main>
   );

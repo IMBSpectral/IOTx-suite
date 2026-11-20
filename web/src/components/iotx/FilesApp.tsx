@@ -20,7 +20,7 @@ const previewable = (f: FItem) => /^(image\/(png|jpe?g|gif|webp|avif)|applicatio
  * with me, Trash, search, upload (drag and drop), preview, share with
  * colleagues or as an expiring link, and, for admins, storage limits.
  */
-export default function FilesApp({ admin, initialView = "mine" }: { admin: boolean; initialView?: string }) {
+export default function FilesApp({ admin, initialView = "mine", initialFile }: { admin: boolean; initialView?: string; initialFile?: string }) {
   useTabTitle("Files");
   const [view, setView] = useState(initialView);
   const [folder, setFolder] = useState<string | null>(null);
@@ -36,6 +36,19 @@ export default function FilesApp({ admin, initialView = "mine" }: { admin: boole
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [newFolder, setNewFolder] = useState<string | null>(null);
   const pick = useRef<HTMLInputElement>(null);
+  // Opened from a link (an @ reference, /drive?file=<id>): show that file, or open that folder.
+  useEffect(() => {
+    if (!initialFile) return;
+    void fetch(`/api/files?item=${encodeURIComponent(initialFile)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { item?: FItem } | null) => {
+        if (!d?.item) return setError("That file isn't there any more, or it isn't shared with you.");
+        if (d.item.kind === "folder") setFolder(d.item.id);
+        else if (previewable(d.item)) setPreview(d.item);
+        else window.open(`/api/files/${d.item.id}`, "_blank");
+      })
+      .catch(() => undefined);
+  }, [initialFile]);
 
   const load = useCallback(async () => {
     const q = new URLSearchParams({ view, ...(folder ? { folder } : {}), ...(search ? { search } : {}) });

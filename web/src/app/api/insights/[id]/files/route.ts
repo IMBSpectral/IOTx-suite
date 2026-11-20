@@ -1,20 +1,39 @@
 import { promises as fs } from "node:fs";
 import { analysisFor, insightsRoute } from "@/lib/insights/http";
 import { addFile } from "@/lib/insights/ingest";
+import { fileRef, refBytes } from "@/lib/ref-files";
 import { docFile, InsightsError, saveAnalysis, sourceFile, withLock } from "@/lib/insights/store";
 import { discoverLinks, dropTable } from "@/lib/insights/engine";
 
 type Ctx = { params: Promise<{ id: string }> };
 export const maxDuration = 300;
 
-/** POST multipart files[] -> { analysis, added, errors } · DELETE ?source=<id> */
+/** POST multipart files[] (or JSON { refs: ["/drive?file=…", "/gdrive?file=…"] }) -> { analysis, added, errors } · DELETE ?source=<id> */
 export const POST = insightsRoute(async (req: Request, { params }: Ctx) => {
   const { id } = await params;
-  await analysisFor(id, "insights.upload");
-  const form = await req.formData();
-  const files = form.getAll("files").filter((f): f is File => typeof f !== "string").slice(0, 20);
+  const { v } = await analysisFor(id, "insights.upload");
+  // Files @-mentioned in the chat (from Files or Google Drive) come in as data, read as this person.
+  let files: File[] = [];
+  const fetchErrors: string[] = [];
+  if ((req.headers.get("content-type") ?? "").includes("application/json")) {
+    const b = (await req.json().catch(() => ({}))) as { refs?: unknown };
+    for (const r of (Array.isArray(b.refs) ? b.refs : []).slice(0, 10)) {
+      const ref = fileRef(String(r));
+      if (!ref) continue;
+      try {
+        const f = await refBytes(v.userId, v.workspaceId, ref);
+        files.push(new File([new Uint8Array(f.data)], f.name, { type: f.type }));
+      } catch (e) {
+        fetchErrors.push(e instanceof Error ? e.message : String(e));
+      }
+    }
+    if (!files.length) return Response.json({ error: fetchErrors[0] ?? "No files", errors: fetchErrors }, { status: 400 });
+  } else {
+    const form = await req.formData();
+    files = form.getAll("files").filter((f): f is File => typeof f !== "string").slice(0, 20);
+  }
   if (!files.length) return Response.json({ error: "No files" }, { status: 400 });
-  const errors: string[] = [];
+  const errors: string[] = [...fetchErrors];
   const added: string[] = [];
   const a = await withLock(id, async () => {
     const { a } = await analysisFor(id, "insights.upload");

@@ -100,6 +100,7 @@ const ROUTES: [RegExp, string][] = [
   [/^\/docs(\/|$)/, "docs"],
   [/^\/sheets(\/|$)/, "sheets"],
   [/^\/insights(\/|$)/, "insights"],
+  [/^\/gdrive(\/|$)/, "gdrive"],
   [/^\/slides(\/|$)/, "slides"],
   [/^\/mail(\/|$)/, "mail"],
   [/^\/drive(\/|$)/, "files"],
