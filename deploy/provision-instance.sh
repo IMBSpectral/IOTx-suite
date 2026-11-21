@@ -30,7 +30,7 @@ if ! command -v caddy >/dev/null; then
 fi
 echo "node $(node -v), $(docker --version | cut -d, -f1), caddy $(caddy version | cut -d' ' -f1)"
 
-mkdir -p "$ROOT/web" "$ROOT/workspace" "$ROOT/projects-data/_forge" "$ROOT/livekit"
+mkdir -p "$ROOT/web" "$ROOT/workspace" "$ROOT/site" "$ROOT/projects-data/_forge" "$ROOT/livekit"
 rand() { openssl rand -base64 48 | tr -d '/+=\n' | head -c "${1:-40}"; }
 
 echo "== database"
@@ -84,6 +84,11 @@ setkv "$WSE" WORKSPACE_PUBLIC_URL ""
 setkv "$WSE" PUBLIC_ORIGIN "https://$DOMAIN"
 setkv "$WSE" IOTX_SERVICE_KEY "$SERVICE_KEY"
 setkv "$WSE" MEET_RECORDINGS_DIR "$ROOT/workspace/storage/meet-recordings"
+SITE=$ROOT/site/.env
+setkv "$SITE" NODE_ENV production
+# Where the site's "Sign in" and "Get started" links point. Changing where the
+# suite is served (apex vs a subdomain) means changing this too.
+setkv "$SITE" NEXT_PUBLIC_APP_URL "https://$DOMAIN"
 
 echo "== services"
 cat > /etc/systemd/system/iotx.service <<EOF
@@ -117,8 +122,23 @@ StandardError=append:/var/log/iotx-workspace.log
 [Install]
 WantedBy=multi-user.target
 EOF
+cat > /etc/systemd/system/iotx-site.service <<EOF
+[Unit]
+Description=IOTx public website
+After=network.target
+[Service]
+WorkingDirectory=$ROOT/site
+ExecStart=/usr/bin/npx next start -p 3200 -H 127.0.0.1
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+StandardOutput=append:/var/log/iotx-site.log
+StandardError=append:/var/log/iotx-site.log
+[Install]
+WantedBy=multi-user.target
+EOF
 systemctl daemon-reload
-systemctl enable iotx iotx-workspace >/dev/null 2>&1
+systemctl enable iotx iotx-workspace iotx-site >/dev/null 2>&1
 
 echo "== web server (Caddy) for $DOMAIN"
 cat > /etc/caddy/Caddyfile <<EOF

@@ -12,8 +12,12 @@ APP=$1
 DIR=/opt/iotx/$APP
 STAGE=/opt/iotx/$APP.staging
 PREV=/opt/iotx/$APP.prev
-SVC=$([ "$APP" = web ] && echo iotx || echo iotx-workspace)
-PORT=$([ "$APP" = web ] && echo 3000 || echo 3100)
+case "$APP" in
+  web)       SVC=iotx;           PORT=3000 ;;
+  workspace) SVC=iotx-workspace; PORT=3100 ;;
+  site)      SVC=iotx-site;      PORT=3200 ;;
+  *) echo "unknown app '$APP' (web|workspace|site)" >&2; exit 1 ;;
+esac
 TS=$(date +%Y%m%d-%H%M%S)
 
 mkdir -p "$DIR"
@@ -27,8 +31,10 @@ cp -a "$DIR"/.env "$STAGE"/ 2>/dev/null || { echo "No $DIR/.env: run provision-i
 if [ -d "$DIR/node_modules" ]; then cp -a "$DIR/node_modules" "$STAGE/node_modules"; fi
 cd "$STAGE"
 npm ci --no-audit --no-fund --loglevel=error
-npx prisma db push 2>&1 | tail -3
-npx prisma generate >/dev/null 2>&1 || true
+if [ -f prisma/schema.prisma ]; then
+  npx prisma db push 2>&1 | tail -3
+  npx prisma generate >/dev/null 2>&1 || true
+fi
 NODE_OPTIONS=--max-old-space-size=4096 npm run build > "/opt/iotx/build-$APP.log" 2>&1 || { echo "BUILD FAILED (live version untouched), see /opt/iotx/build-$APP.log"; tail -30 "/opt/iotx/build-$APP.log"; exit 1; }
 
 # Swap: seconds of downtime.

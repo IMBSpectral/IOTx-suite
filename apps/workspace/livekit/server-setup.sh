@@ -1,14 +1,26 @@
 #!/usr/bin/env bash
 # One-time Meet media setup on the production server (see README.md, "Production").
+#   bash server-setup.sh <domain>        e.g. bash server-setup.sh imbpraxintel.in
 # Makes a NEW LiveKit key pair on the server (never printed), writes livekit.yaml
 # and egress.yaml, adds the LiveKit and transcription settings to the workspace
 # .env, and starts Redis, LiveKit (with TURN on 3478/udp) and Egress. Safe to re-run:
 # existing keys and containers are kept.
+#
+# The domain is this server's own public host: it ends up in the TURN domain and
+# in LIVEKIT_PUBLIC_URL, which browsers dial. Each server passes its own, so this
+# script is not tied to any one instance. When it is omitted the domain is read
+# back from the workspace .env (PUBLIC_ORIGIN), which provision-instance.sh set.
 set -euo pipefail
 LK=/opt/iotx/livekit
 WS_ENV=/opt/iotx/workspace/.env
 WEB_ENV=/opt/iotx/web/.env
 REC=/opt/iotx/workspace/storage/meet-recordings
+DOMAIN=${1:-}
+if [ -z "$DOMAIN" ]; then
+  DOMAIN=$(sed -n 's|^PUBLIC_ORIGIN=https\?://||p' "$WS_ENV" | head -1)
+fi
+[ -n "$DOMAIN" ] || { echo "usage: $0 <domain>   (or set PUBLIC_ORIGIN in $WS_ENV)" >&2; exit 1; }
+echo "domain: $DOMAIN"
 mkdir -p "$LK" "$REC"
 chmod 700 "$LK"
 chown -R 1001 "$REC" || true
@@ -31,7 +43,7 @@ keys:
   $KEY: $SECRET
 turn:
   enabled: true
-  domain: imbspectral.online
+  domain: $DOMAIN
   udp_port: 3478
 room:
   empty_timeout: 300
@@ -60,7 +72,7 @@ EOF
   grep -v -E '^(LIVEKIT_URL|LIVEKIT_PUBLIC_URL|LIVEKIT_API_KEY|LIVEKIT_API_SECRET|OPENAI_API_KEY|MEET_RECORDINGS_DIR)=' "$WS_ENV" > "$WS_ENV.new"
   {
     echo "LIVEKIT_URL=ws://127.0.0.1:7880"
-    echo "LIVEKIT_PUBLIC_URL=wss://imbspectral.online/livekit"
+    echo "LIVEKIT_PUBLIC_URL=wss://$DOMAIN/livekit"
     echo "LIVEKIT_API_KEY=$KEY"
     echo "LIVEKIT_API_SECRET=$SECRET"
     echo "MEET_RECORDINGS_DIR=$REC"

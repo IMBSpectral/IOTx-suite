@@ -1,0 +1,191 @@
+name: Deploy
+
+# Ships a server's release line to that server.
+#
+# This follows deploy/ship.sh: every server runs its own line, release/<name>,
+# and only the changes chosen for it are on that line. Pushing main deploys
+# NOTHING — that is deliberate. You pick what each server gets, with
+# `deploy/ship.sh deploy <server> <change…>`, which updates release/<server>;
+# this workflow then does the shipping part and shows it in Actions.
+#
+# Servers and their hosts come from deploy/servers.conf, so adding a server is
+# a line in that file plus its release branch — no change here.
+#
+# The build happens ON THE SERVER, in deploy/remote-deploy.sh: into a staging
+# directory while the live release keeps serving, swapped only on success. A
+# bad commit fails this run without taking the site down.
+on:
+  push:
+    branches: ['release/*']
+  workflow_dispatch:
+    inputs:
+      server:
+        description: Server name, as it appears in deploy/servers.conf
+        required: true
+        type: string
+      apps:
+        description: Which apps to ship
+        type: choice
+        options: [changed, both, web, workspace]
+        default: changed
+
+permissions:
+  contents: read
+
+concurrency:
+  # One deploy at a time per server; queue rather than cancel, so a run never
+  # dies midway through swapping directories.
+  group: deploy-${{ github.event.inputs.server || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    outputs:
+      server: ${{ steps.p.outputs.server }}
+      host: ${{ steps.p.outputs.host }}
+      url: ${{ steps.p.outputs.url }}
+      web: ${{ steps.p.outputs.web }}
+      workspace: ${{ steps.p.outputs.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - id: p
+        run: |
+          set -euo pipefail
+
+          # Server name: from the input, or from release/<name>.
+          server="${{ github.event.inputs.server }}"
+          if [ -z "$server" ]; then
+            server="${GITHUB_REF_NAME#release/}"
+          fi
+          [ -n "$server" ] || { echo "::error::could not determine server"; exit 1; }
+
+          # Look it up in the single source of truth.
+          line=$(awk -v n="$server" '!/^#/ && $1==n {print; found=1} END {exit !found}' deploy/servers.conf) || {
+            echo "::error::server '$server' is not in deploy/servers.conf"; exit 1; }
+          host=$(echo "$line" | awk '{print $2}')
+          url=$(echo  "$line" | awk '{print $3}')
+
+          # Which apps to ship.
+          apps="${{ github.event.inputs.apps }}"
+          web=false; workspace=false
+          case "${apps:-changed}" in
+            both)      web=true; workspace=true ;;
+            web)       web=true ;;
+            workspace) workspace=true ;;
+            changed)
+              if changed=$(git diff --name-only HEAD^ HEAD 2>/dev/null); then
+                echo "changed files:"; echo "$changed"
+                if echo "$changed" | grep -q '^web/';            then web=true; fi
+                if echo "$changed" | grep -q '^apps/workspace/'; then workspace=true; fi
+              else
+                echo "no parent commit to diff; shipping both"
+                web=true; workspace=true
+              fi
+              ;;
+          esac
+
+          {
+            echo "server=$server"; echo "host=$host"; echo "url=$url"
+            echo "web=$web"; echo "workspace=$workspace"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "::notice title=Plan::$server ($url) — web=$web workspace=$workspace"
+
+  deploy:
+    name: ${{ matrix.app }} → ${{ needs.plan.outputs.server }}
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: ${{ needs.plan.outputs.server }}
+      url: ${{ needs.plan.outputs.url }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1       # web first, then workspace: they share the box
+      matrix:
+        include:
+          - app: web
+            dir: web
+            path: /login
+          - app: workspace
+            dir: apps/workspace
+            path: /workspace/tasks
+    steps:
+      - name: Preflight
+        id: gate
+        env:
+          WANT: ${{ matrix.app == 'web' && needs.plan.outputs.web || needs.plan.outputs.workspace }}
+          HAVE_KEY: ${{ secrets.SHIP_SSH_KEY != '' }}
+          HAVE_HOSTS: ${{ secrets.SHIP_KNOWN_HOSTS != '' }}
+        run: |
+          set -euo pipefail
+          if [ "$WANT" != "true" ]; then
+            echo "::notice::${{ matrix.app }} unchanged, skipping"
+            echo "run=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          missing=""
+          [ "$HAVE_KEY"   = "true" ] || missing="$missing SHIP_SSH_KEY"
+          [ "$HAVE_HOSTS" = "true" ] || missing="$missing SHIP_KNOWN_HOSTS"
+          if [ -n "$missing" ]; then
+            echo "::warning title=Deploy not configured::Missing secrets:$missing — see .github/DEPLOY.md. Skipping."
+            echo "run=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "run=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == 'true'
+
+      - name: Authorise SSH
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.SHIP_SSH_KEY }}" > ~/.ssh/id_ship
+          chmod 600 ~/.ssh/id_ship
+          printf '%s\n' "${{ secrets.SHIP_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Package
+        if: steps.gate.outputs.run == 'true'
+        working-directory: ${{ matrix.dir }}
+        run: |
+          tar --exclude=node_modules --exclude=.next --exclude=.git \
+              --exclude=.env --exclude=.env.local --exclude=storage \
+              --exclude='*.log' -czf "$RUNNER_TEMP/${{ matrix.app }}-new.tgz" .
+          ls -lh "$RUNNER_TEMP/${{ matrix.app }}-new.tgz"
+
+      - name: Upload and deploy
+        if: steps.gate.outputs.run == 'true'
+        env:
+          HOST: ${{ needs.plan.outputs.host }}
+        run: |
+          set -euo pipefail
+          scp -i ~/.ssh/id_ship -o BatchMode=yes \
+            "$RUNNER_TEMP/${{ matrix.app }}-new.tgz" \
+            "root@$HOST:/opt/iotx/${{ matrix.app }}-new.tgz"
+          ssh -i ~/.ssh/id_ship -o BatchMode=yes "root@$HOST" \
+            "bash /root/remote-deploy.sh ${{ matrix.app }}"
+
+      - name: Health check
+        if: steps.gate.outputs.run == 'true'
+        env:
+          TARGET: ${{ needs.plan.outputs.url }}${{ matrix.path }}
+        run: |
+          for i in $(seq 1 12); do
+            code=$(curl -s -o /dev/null -m 20 -w '%{http_code}' -L "$TARGET" || echo 000)
+            echo "attempt $i: $TARGET -> $code"
+            case "$code" in
+              200|302|307|308) echo "::notice::${{ matrix.app }} healthy on ${{ needs.plan.outputs.server }} ($code)"; exit 0 ;;
+            esac
+            sleep 10
+          done
+          echo "::error::${{ matrix.app }} did not come up on ${{ needs.plan.outputs.server }}"
+          exit 1
+
+      - name: Discard the key
+        if: always()
+        run: rm -f ~/.ssh/id_ship
