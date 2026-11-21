@@ -1,12 +1,40 @@
 #!/usr/bin/env bash
 # Production smoke test. Run from anywhere, against any server:
 #   bash deploy/smoke.sh imbpraxintel.in [ssh-host] [ssh-key]
+#   bash deploy/smoke.sh imbpraxintel            # server name from servers.conf
 # Checks what a user and an operator each depend on. One PASS/FAIL per line;
 # exits non-zero if anything failed.
 DOMAIN=${1:?domain}
 SSH_HOST=${2:-}
 SSH_KEY=${3:-}
+
+# A bare server name (no dot) is looked up in servers.conf, so that
+# "smoke.sh imbpraxintel" does the right thing instead of silently testing a
+# hostname that does not exist.
+case "$DOMAIN" in
+  *.*) ;;
+  *)
+    conf="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/servers.conf"
+    line=$(awk -v n="$DOMAIN" '$1==n{print; exit}' "$conf" 2>/dev/null)
+    [ -n "$line" ] || { echo "no server '$DOMAIN' in $conf" >&2; exit 2; }
+    SSH_HOST=${SSH_HOST:-$(echo "$line" | awk '{print $2}')}
+    DOMAIN=$(echo "$line" | awk '{print $3}' | sed -E 's|^https?://||')
+    echo "server $1 -> $DOMAIN ($SSH_HOST)"
+    ;;
+esac
+
+# Preflight. Without this, a domain that does not resolve makes every nc check
+# report PASS ("port closed") and every curl check report a confusing 000 — a
+# broken invocation would look like a mostly-healthy server.
+host_ok=$(getent hosts "$DOMAIN" 2>/dev/null | head -1 | awk '{print $1}')
+[ -n "$host_ok" ] || host_ok=$(dig +short "$DOMAIN" A 2>/dev/null | head -1)
+[ -n "$host_ok" ] || { echo "FATAL: $DOMAIN does not resolve — nothing below would be meaningful" >&2; exit 2; }
+if ! curl -s -o /dev/null -m 20 "https://$DOMAIN/" 2>/dev/null; then
+  echo "FATAL: https://$DOMAIN/ did not answer at all — is the name right?" >&2; exit 2
+fi
+
 pass=0; fail=0
+
 ok()  { printf '  PASS  %s\n' "$1"; pass=$((pass+1)); }
 no()  { printf '  FAIL  %s — %s\n' "$1" "$2"; fail=$((fail+1)); }
 chk() { if [ "$2" = "$3" ]; then ok "$1"; else no "$1" "want '$2', got '$3'"; fi; }
