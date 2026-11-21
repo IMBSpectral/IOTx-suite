@@ -30,7 +30,7 @@ const SOURCES: Record<string, { from: "suite" | "workspace"; label?: string }> =
   tasks: { from: "workspace" },
   calendar: { from: "workspace" },
   meetings: { from: "workspace" },
-  mail: { from: "suite" },
+  mail: { from: "suite", label: "Emails" },
   sheets: { from: "suite" },
   docs: { from: "suite" },
   slides: { from: "suite" },
@@ -282,7 +282,7 @@ export default function MentionPicker({ tabs, winOf }: { tabs: Tab[]; winOf: (id
       const base = src.from === "workspace" ? "/workspace/api/mentions" : "/api/mentions";
       return fetch(`${base}?app=${a}&q=${encodeURIComponent(term)}`, { signal: ctl.signal, cache: "no-store" })
         .then(json)
-        .then((d: { items?: Omit<Ref, "key">[] }) => (d.items ?? []).map((x) => ({ ...x, key: `${a}:${(x as { id?: string }).id ?? x.label}`, icon: a === "people" || a === "mail" || x.kind === "person" ? "people" : MANIFESTS.find((m) => m.id === a)?.icon ?? "link", color: MANIFESTS.find((m) => m.id === a)?.color ?? "#868e96" })))
+        .then((d: { items?: Omit<Ref, "key">[] }) => (d.items ?? []).map((x) => ({ ...x, key: `${a}:${(x as { id?: string }).id ?? x.label}`, icon: a === "people" || x.kind === "person" ? "people" : MANIFESTS.find((m) => m.id === a)?.icon ?? "link", color: MANIFESTS.find((m) => m.id === a)?.color ?? "#868e96" })))
         .catch(() => [] as Ref[]);
     };
     const t = setTimeout(async () => {

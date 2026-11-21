@@ -1,3 +1,4 @@
+import { applyLiveChange, liveChanges, rejectLiveChange } from "@/lib/cloud-live-changes";
 import { cloudKey, requireProjectPerm } from "@/lib/iotx/permissions";
 import { getBrand } from "@/lib/brand";
 import { requireUser, requireProject } from "@/lib/workspace";
@@ -55,6 +56,7 @@ async function GET_(req: Request, { params }: Ctx) {
     secrets: Object.entries(cfg.secrets).map(([name, s]) => ({ name, updatedAt: s.updatedAt })),
     inheritedSecrets: await inheritedSecretNames(id),
     hasLive: await hasLive(id),
+    liveChanges: await liveChanges(id),
     requestedSecrets: cfg.requestedSecrets,
   });
 }
@@ -137,6 +139,11 @@ async function POST_(req: Request, { params }: Ctx) {
         return Response.json({ ok: true, migration: await applyMigration(id, body.id ?? "") });
       case "reject":
         await rejectMigration(id, body.id ?? "");
+        return Response.json({ ok: true });
+      case "approveLive":
+        return Response.json({ ok: true, ...(await applyLiveChange(id, body.id ?? "", user.id)) });
+      case "rejectLive":
+        await rejectLiveChange(id, body.id ?? "", user.id);
         return Response.json({ ok: true });
       case "setSecret":
         await setSecret(id, body.name ?? "", body.value ?? "");

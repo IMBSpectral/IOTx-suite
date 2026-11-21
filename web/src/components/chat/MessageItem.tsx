@@ -114,6 +114,8 @@ function describe(step: Exclude<Step, { kind: "questions" }>, brand: Brand): [Re
       return [<Database key="i" className={ICON} />, step.auto ? <>Turned on {brand.shortName} Cloud</> : <>Asked to enable {brand.shortName} Cloud</>];
     case "migration":
       return [<Database key="i" className={ICON} />, <>Proposed a migration: {step.detail}</>];
+    case "livechange":
+      return [<Database key="i" className={ICON} />, <>Proposed a change to the live data: {step.detail}</>];
     case "secret":
       return [<KeyRound key="i" className={ICON} />, <>Asked for secret {step.name}</>];
     case "switch":

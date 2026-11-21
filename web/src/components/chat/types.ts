@@ -61,6 +61,7 @@ export type Step =
   | { kind: "permission"; key: string; connection: string; tool: string; source: "connector" | "mcp" }
   | { kind: "vault"; site: string }
   | { kind: "migration"; id: string; detail: string }
+  | { kind: "livechange"; id: string; detail: string }
   | { kind: "secret"; name: string; detail: string }
   | { kind: "switch"; detail: string }
   | { kind: "changeset"; id: string; detail: string }
@@ -136,7 +137,7 @@ export function parseStep(raw: string): Step | null {
   // changeset:<id>:<summary> — proposed ad campaign changes awaiting approval
   // project:<id>:<name> — a new project the agent created
   // visual:<id>:<title> — a visual explanation drawn for the user
-  if (kind === "migration" || kind === "secret" || kind === "changeset" || kind === "project" || kind === "moved" || kind === "visual" || kind === "document") {
+  if (kind === "migration" || kind === "livechange" || kind === "secret" || kind === "changeset" || kind === "project" || kind === "moved" || kind === "visual" || kind === "document") {
     const j = rest.indexOf(":");
     const head = j < 0 ? rest : rest.slice(0, j);
     const detail = j < 0 ? "" : rest.slice(j + 1);

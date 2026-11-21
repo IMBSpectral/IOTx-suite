@@ -125,6 +125,18 @@ export default function MailApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [box, folder]);
 
+  // Opened from a link (an @ reference, /mail?mailbox=<id>&msg=<id>): show that message once.
+  const linked = useRef(false);
+  useEffect(() => {
+    if (linked.current || !box) return;
+    const u = new URLSearchParams(window.location.search);
+    const msg = u.get("msg");
+    if (!msg || u.get("mailbox") !== box) return;
+    linked.current = true;
+    void openRow(msg);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [box]);
+
   async function openRow(id: string) {
     setOpen(null);
     setBusy("open");

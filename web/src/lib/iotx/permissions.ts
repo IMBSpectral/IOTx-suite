@@ -336,7 +336,7 @@ const CLOUD_KEYS: Record<string, string> = {
   createUser: "builder.cloud.users", deleteUser: "builder.cloud.users", setPassword: "builder.cloud.users", setAuth: "builder.cloud.users",
   insertRow: "builder.cloud.rows", updateRow: "builder.cloud.rows", deleteRow: "builder.cloud.rows", policy: "builder.cloud.rows",
   emailExport: "builder.cloud.rows",
-  sql: "builder.cloud.sql", backup: "builder.cloud.sql", restore: "builder.cloud.sql", deleteBackup: "builder.cloud.sql",
+  sql: "builder.cloud.sql", backup: "builder.cloud.sql", restore: "builder.cloud.sql", deleteBackup: "builder.cloud.sql", approveLive: "builder.cloud.sql", rejectLive: "builder.cloud.sql",
   createBucket: "builder.cloud.storage", deleteBucket: "builder.cloud.storage", uploadFile: "builder.cloud.storage", deleteFile: "builder.cloud.storage", signUrl: "builder.cloud.storage",
   startRun: "builder.cloud.jobs", approveRun: "builder.cloud.jobs", rejectRun: "builder.cloud.jobs", sendEvent: "builder.cloud.jobs", cancelRun: "builder.cloud.jobs", retryRun: "builder.cloud.jobs",
   createJob: "builder.cloud.jobs", updateJob: "builder.cloud.jobs", deleteJob: "builder.cloud.jobs", runJob: "builder.cloud.jobs",
