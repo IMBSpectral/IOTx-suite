@@ -51,7 +51,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          # Full history: 'changed' diffs against the commit the branch was at
+          # before this push, which a shallow clone would not have.
+          fetch-depth: 0
 
       - id: p
         run: |
@@ -78,12 +80,21 @@ jobs:
             web)       web=true ;;
             workspace) workspace=true ;;
             changed)
-              if changed=$(git diff --name-only HEAD^ HEAD 2>/dev/null); then
-                echo "changed files:"; echo "$changed"
+              # Diff against where the branch was BEFORE this push, not HEAD^:
+              # a push can carry many commits, and HEAD^ would see only the
+              # last one. A brand-new branch has an all-zero "before", and a
+              # force-push or an expired object can leave it unreachable; in
+              # any of those cases we cannot tell what changed, so ship
+              # everything rather than silently shipping nothing.
+              before="${{ github.event.before }}"
+              if [ -n "$before" ] && ! printf '%s' "$before" | grep -qE '^0+$' \
+                 && git cat-file -e "${before}^{commit}" 2>/dev/null; then
+                changed=$(git diff --name-only "$before" HEAD)
+                echo "changed since $before:"; echo "$changed"
                 if echo "$changed" | grep -q '^web/';            then web=true; fi
                 if echo "$changed" | grep -q '^apps/workspace/'; then workspace=true; fi
               else
-                echo "no parent commit to diff; shipping both"
+                echo "cannot tell what changed (new branch, force-push or shallow history); shipping both"
                 web=true; workspace=true
               fi
               ;;
