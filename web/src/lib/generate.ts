@@ -26,7 +26,9 @@ import nodePath from "node:path";
 import { repoDir } from "./paths";
 import { feedLiveWrite, startLiveWrite, takeLiveWrite, type LiveWrite } from "./live-write";
 import { formatLogs, readLogs } from "./runtime-logs";
-import { attachmentBlocks, readUpload, type Attachment } from "./uploads";
+import { attachmentBlocks, readUpload, saveUpload, MAX_UPLOAD_BYTES, type Attachment } from "./uploads";
+import { proposeLiveChange } from "./cloud-live-changes";
+import { findMail, mailAttachment, readMail } from "./mail/for-ai";
 import { findSheet, readWorkbook, sheetRows, type Workbook } from "./spreadsheet";
 
 /** Parsed workbooks for read_spreadsheet, kept briefly so paging through a big file stays fast. */
@@ -1183,6 +1185,79 @@ function buildTools(projectId: string, onFile: (e: BuildEvent) => void, userId: 
     },
   });
 
+  const liveChange = betaZodTool({
+    name: "change_live_data",
+    description:
+      `Change the rows in the published app's live database (the data real users see): clear test data before launch, delete rows the user asked to remove, ` +
+      `fix a wrong value. SQL ${engine === "postgres" ? "(PostgreSQL)" : "(SQLite)"} with INSERT, UPDATE or DELETE statements only, separated by semicolons; ` +
+      `no table changes (those are migrations) and no sign-in accounts (auth_users) or platform tables. ` +
+      `The change is rehearsed on the live data first, so the approval card shows how many rows each statement affects; the user approves it in the chat, ` +
+      `the live database is backed up, then everything runs in one transaction. Query env "live" first to see what is there, and keep what the user said to keep ` +
+      `(e.g. their admin login, roles, settings). After calling it, end your turn and wait for the approval. Use it only when the user asks to change live data.`,
+    inputSchema: z.object({
+      description: z.string().describe("Plain words for the approval card: what changes and what is kept, e.g. 'Delete all test entries, workers and attendance; keep users, roles and settings'"),
+      sql: z.string().describe("INSERT / UPDATE / DELETE statements, separated by semicolons"),
+    }),
+    run: async ({ description, sql }) => {
+      try {
+        const c = await proposeLiveChange(projectId, description, sql, userId);
+        onFile({ type: "tool", step: `livechange:${c.id}:${description.slice(0, 160)}` });
+        const total = c.statements.reduce((a, s) => a + s.rows, 0);
+        return `Proposed. Rehearsal on the live data: ${c.statements.map((s) => `${s.rows} row(s): ${s.sql.slice(0, 80)}`).join("; ")} (${total} in total). ` +
+          `Waiting for the user to approve it in the chat. End your turn now and say what will change and what is kept.`;
+      } catch (e) {
+        return `Couldn't propose it: ${e instanceof Error ? e.message : String(e)}`;
+      }
+    },
+  });
+
+  const mailTool = betaZodTool({
+    name: "read_mail",
+    description:
+      "The user's email (their own mailboxes and shared ones they may use in the suite's Mail). " +
+      "action 'search': latest received emails, filtered by from (address or name), subject, text and days; sent: true for sent mail. " +
+      "action 'open' with id: the email's text and its attachments. " +
+      "action 'attach' with id and part: copy an attachment into this project's files for this turn, then read it (read_spreadsheet for Excel/CSV) or save it into the app (save_attachment). " +
+      "Use it when the user asks you to read an email or use data from one (an order, a schedule, a price list).",
+    inputSchema: z.object({
+      action: z.enum(["search", "open", "attach"]),
+      from: z.string().optional(),
+      subject: z.string().optional(),
+      text: z.string().optional(),
+      days: z.number().int().min(1).max(365).optional(),
+      sent: z.boolean().optional(),
+      id: z.string().optional().describe("Email id from search (open, attach)"),
+      part: z.string().optional().describe("Attachment part from open (attach)"),
+    }),
+    run: async (a) => {
+      if (!userId) return "Reading mail needs the person who asked; there isn't one in this turn.";
+      const p = await db.project.findUnique({ where: { id: projectId }, select: { workspaceId: true } });
+      if (!p) return "This project isn't available.";
+      try {
+        if (a.action === "search") {
+          onFile({ type: "tool", step: `logs:Searched email${a.from ? ` from ${a.from}` : ""}${a.subject ? ` about ${a.subject}` : ""}` });
+          const r = await findMail(userId, p.workspaceId, { from: a.from, subject: a.subject, text: a.text, days: a.days, sent: a.sent });
+          if (!r.mailboxes.length) return "This person has no mailbox connected in Mail (or their role can't open Mail). Ask them to connect one in Mail first.";
+          return JSON.stringify(r).slice(0, 20_000);
+        }
+        if (!a.id) return "Give the email id from search.";
+        if (a.action === "open") {
+          const m = await readMail(userId, p.workspaceId, a.id);
+          onFile({ type: "tool", step: `logs:Read email "${m.subject.slice(0, 80)}"` });
+          return JSON.stringify(m).slice(0, 45_000);
+        }
+        if (!a.part) return "Give the attachment's part from open.";
+        const f = await mailAttachment(userId, p.workspaceId, a.id, a.part);
+        if (f.data.length > MAX_UPLOAD_BYTES) return `${f.name} is larger than 20 MB.`;
+        const saved = await saveUpload(projectId, { name: f.name, type: f.type, bytes: f.data });
+        onFile({ type: "tool", step: `logs:Took ${f.name} from an email` });
+        return `Attached as ${saved.name} (attachment id ${saved.id}, ${saved.type}, ${saved.size} bytes). Read it with read_spreadsheet (Excel/CSV) or save it into the app with save_attachment.`;
+      } catch (e) {
+        return `Couldn't read that email: ${e instanceof Error ? e.message : String(e)}`;
+      }
+    },
+  });
+
   const access = betaZodTool({
     name: "set_table_access",
     description:
@@ -1924,6 +1999,8 @@ ${r.text}`;
     enableCloudTool,
     migration,
     queryDb,
+    liveChange,
+    mailTool,
     access,
     bucketTool,
     fnTest,
@@ -2065,6 +2142,7 @@ async function allowedToolFilter(projectId: string, userId: string | null) {
 
 const READ_ONLY_TOOLS = new Set([
   "search_company_knowledge",
+  "read_mail",
   "suggest_knowledge_update",
   "view_app",
   "read_file",

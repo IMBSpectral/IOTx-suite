@@ -6,6 +6,7 @@ import { useBrand } from "@/components/BrandProvider";
 import type { Step } from "./types";
 
 type Migration = { id: string; description: string; sql: string; status: string; error: string | null };
+type LiveChange = { id: string; description: string; sql: string; statements: { sql: string; rows: number }[]; status: string; error?: string; backup?: string };
 
 /**
  * Approval cards for Forge Cloud, under the agent's latest reply: turn Cloud
@@ -26,13 +27,16 @@ export default function CloudCards({
   const cloud = steps.find((s) => s.kind === "cloud");
   const migrations = steps.filter((s): s is Extract<Step, { kind: "migration" }> => s.kind === "migration");
   const secrets = steps.filter((s): s is Extract<Step, { kind: "secret" }> => s.kind === "secret");
-  const [state, setState] = useState<{ enabled: boolean; migrations: Migration[]; secrets: string[] } | null>(null);
+  const changes = steps.filter((s): s is Extract<Step, { kind: "livechange" }> => s.kind === "livechange");
+  const [state, setState] = useState<{ enabled: boolean; migrations: Migration[]; secrets: string[]; liveChanges: LiveChange[] } | null>(null);
+  // A live data change is approved in two steps: review, then confirm.
+  const [confirming, setConfirming] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showSql, setShowSql] = useState<string | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
-  const relevant = !!cloud || migrations.length > 0 || secrets.length > 0;
+  const relevant = !!cloud || migrations.length > 0 || secrets.length > 0 || changes.length > 0;
 
   useEffect(() => {
     if (!relevant) return;
@@ -45,6 +49,7 @@ export default function CloudCards({
           enabled: d.enabled,
           migrations: d.migrations ?? [],
           secrets: (d.secrets ?? []).map((x: { name: string }) => x.name),
+          liveChanges: d.liveChanges ?? [],
         });
       })
       .catch(() => undefined);
@@ -148,6 +153,94 @@ export default function CloudCards({
                   Reject
                 </button>
               </div>
+            )}
+          </div>
+        );
+      })}
+
+      {changes.map((c) => {
+        const row = state.liveChanges.find((x) => x.id === c.id);
+        const status = row?.status ?? "pending";
+        const total = row?.statements.reduce((a, s) => a + s.rows, 0) ?? 0;
+        return (
+          <div key={c.id} className={card} style={{ background: "var(--panel)", borderColor: status === "pending" ? "#f59e0b" : undefined }}>
+            <p className="flex items-center gap-1.5 font-medium">
+              <Database className="h-4 w-4" />
+              {status === "pending"
+                ? "Change the live app's data?"
+                : status === "applied"
+                  ? `Live data changed: ${total.toLocaleString()} row${total === 1 ? "" : "s"}`
+                  : status === "rejected"
+                    ? "Change to the live data rejected"
+                    : "Change to the live data failed; nothing was changed"}
+            </p>
+            <p className="mt-1 text-xs" style={muted}>
+              {c.detail}
+            </p>
+            {row && (
+              <ul className="mt-2 space-y-0.5 text-xs">
+                {row.statements.map((s, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="w-20 shrink-0 text-right font-medium tabular-nums">{s.rows.toLocaleString()} row{s.rows === 1 ? "" : "s"}</span>
+                    <span className="truncate font-mono text-[11px]" style={muted} title={s.sql}>
+                      {s.sql}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {row && (
+              <button onClick={() => setShowSql(showSql === c.id ? null : c.id)} className="mt-1 text-xs hover:underline" style={muted}>
+                {showSql === c.id ? "Hide SQL" : "Review SQL"}
+              </button>
+            )}
+            {showSql === c.id && row && <pre className="mt-2 max-h-48 overflow-auto rounded-lg border p-2 font-mono text-[11px]">{row.sql}</pre>}
+            {row?.error && <p className="mt-1 text-xs text-red-600">{row.error}</p>}
+            {status === "applied" && row?.backup && (
+              <p className="mt-1 text-xs" style={muted}>
+                The live data was backed up first ({row.backup}).
+              </p>
+            )}
+            {status === "pending" && (
+              <>
+                <p className="mt-2 text-xs" style={muted}>
+                  Rows counted by rehearsing the change on the live data and undoing it. Approving backs up the live database first, then makes every change at once, or none if anything fails.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {confirming === c.id ? (
+                    <button
+                      disabled={!!busy}
+                      onClick={async () => {
+                        const ok = await act(`live-${c.id}`, { action: "approveLive", id: c.id });
+                        setConfirming(null);
+                        onContinue(ok ? `I approved the change to the live data ("${c.detail}"). It's done; confirm what changed.` : `The change to the live data ("${c.detail}") failed. Look at the error and propose a fixed one.`);
+                      }}
+                      className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                    >
+                      {busy === `live-${c.id}` ? "Backing up and changing…" : `Yes, change ${total.toLocaleString()} live row${total === 1 ? "" : "s"}`}
+                    </button>
+                  ) : (
+                    <button
+                      disabled={!!busy}
+                      onClick={() => setConfirming(c.id)}
+                      className="rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                      style={{ background: "var(--accent)" }}
+                    >
+                      Review and approve
+                    </button>
+                  )}
+                  <button
+                    disabled={!!busy}
+                    onClick={async () => {
+                      setConfirming(null);
+                      if (await act(`livereject-${c.id}`, { action: "rejectLive", id: c.id })) onContinue(`I rejected the change to the live data ("${c.detail}").`);
+                    }}
+                    className="rounded-lg border px-3 py-1.5 text-xs disabled:opacity-50"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </>
             )}
           </div>
         );
