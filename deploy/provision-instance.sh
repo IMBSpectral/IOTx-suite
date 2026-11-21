@@ -140,7 +140,17 @@ EOF
 systemctl daemon-reload
 systemctl enable iotx iotx-workspace iotx-site >/dev/null 2>&1
 
-echo "== web server (Caddy) for $DOMAIN"
+# www: by default it redirects to the apex, which is what a server wants when
+# the suite itself answers at www too. With SITE_ON_WWW=on the public
+# marketing site (iotx-site on :3200) is served there instead, leaving the
+# suite on the apex -- imbpraxintel.in is set up this way.
+if [ "${SITE_ON_WWW:-off}" = "on" ]; then
+  WWW_HANDLER="reverse_proxy 127.0.0.1:3200"
+else
+  WWW_HANDLER="redir https://$DOMAIN{uri} permanent"
+fi
+
+echo "== web server (Caddy) for $DOMAIN (www: ${SITE_ON_WWW:-off})"
 cat > /etc/caddy/Caddyfile <<EOF
 {
 	on_demand_tls {
@@ -148,7 +158,7 @@ cat > /etc/caddy/Caddyfile <<EOF
 	}
 }
 www.$DOMAIN {
-	redir https://$DOMAIN{uri} permanent
+	$WWW_HANDLER
 }
 https:// {
 	tls {

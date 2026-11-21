@@ -90,6 +90,26 @@ Those `.env` files are **not** in git and a deploy never overwrites them:
 (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) are added to them by hand after
 provisioning.
 
+### Where the public site is served
+
+`apps/site` (the marketing page) always runs on `:3200`. What reaches it is a
+provisioning choice:
+
+| `SITE_ON_WWW` | `www.<domain>` | `<domain>` |
+| --- | --- | --- |
+| `off` (default) | redirects to the apex | the suite |
+| `on` | the marketing site | the suite |
+
+Pass it when provisioning: `SITE_ON_WWW=on bash deploy/provision-instance.sh …`.
+**imbpraxintel.in runs with `on`.** The site's "Sign in" links come from
+`NEXT_PUBLIC_APP_URL` in `/opt/iotx/site/.env`, which must be the suite's
+origin; `deploy/smoke.sh` checks that those links actually point there.
+
+Serving the site at the *apex* instead would need more than a Caddy change:
+`web/src/app/api/tls-check/route.ts` only authorises a certificate for the
+apex, `www`, and subdomains that match a project, so the suite's new hostname
+(`app.<domain>`) would be refused one until it is added there.
+
 ## CI
 
 `ci.yml` runs on pushes and pull requests: `npm ci`, `prisma generate`, then

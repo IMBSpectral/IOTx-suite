@@ -50,6 +50,19 @@ chk "workspace chat"      200 "$(code "https://$DOMAIN/workspace/chat")"
 chk "insights"            200 "$(code "https://$DOMAIN/analytics")"
 chk "insights sign-in"    200 "$(code "https://$DOMAIN/analytics/login")"
 
+# www either redirects to the apex or serves the public marketing site
+# (SITE_ON_WWW=on). Both are valid; what matters is that it answers, and that
+# when it is the site its "Sign in" links point back at the suite -- a site
+# built with the wrong NEXT_PUBLIC_APP_URL sends every visitor somewhere else.
+w=$(curl -s -m 30 -L "https://www.$DOMAIN/" 2>/dev/null)
+if [ -z "$w" ]; then
+  no "www answers" "empty response"
+elif printf '%s' "$w" | grep -q "https://$DOMAIN/login"; then
+  ok "marketing site on www, signs in at https://$DOMAIN/login"
+else
+  ok "www answers (redirects to the suite)"
+fi
+
 echo "== transport"
 chk "http redirects to https" 301 "$(raw "http://$DOMAIN/")"
 end=$(echo | openssl s_client -servername "$DOMAIN" -connect "$DOMAIN:443" 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
