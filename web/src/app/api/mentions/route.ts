@@ -11,13 +11,14 @@ import * as g from "@/lib/google";
 import * as spaces from "@/lib/spaces";
 import { bytesToText, fileRef, refBytes } from "@/lib/ref-files";
 import { getAnalysis, listAnalyses } from "@/lib/insights/store";
+import { findMail, readMail, type MailHit } from "@/lib/mail/for-ai";
 
 /**
  * The suite's global @ picker, for the apps that live in this server (the
  * Workspace apps answer at /workspace/api/mentions). Only what the person can
  * already open.
- *   GET ?app=builder|spaces|sheets|docs|slides|read|files|gdrive|insights|chat|mail|people&q=  -> { items }
- *   GET ?ref=/projects/<id> (or /spaces/…, /sheets/…, /docs/…, /slides/…, /knowledge?doc=…, /drive?file=…, /gdrive?file=…, /insights?a=…, /home/chat?chat=…)
+ *   GET ?app=builder|spaces|sheets|docs|slides|read|files|gdrive|insights|chat|mail (emails)|people&q=  -> { items }
+ *   GET ?ref=/projects/<id> (or /spaces/…, /sheets/…, /docs/…, /slides/…, /knowledge?doc=…, /drive?file=…, /gdrive?file=…, /insights?a=…, /mail?mailbox=…&msg=…, /home/chat?chat=…)
  *                                                                        -> { title, text } for the AI
  */
 
@@ -95,7 +96,17 @@ async function GET_(req: Request) {
       .filter((a) => !q || a.name.toLowerCase().includes(q.toLowerCase()))
       .slice(0, 25)
       .map((a) => ({ id: a.id, label: a.name, sub: `${a.tables.length} tables · ${a.board.length} charts`, url: `/insights?a=${a.id}`, kind: "item" }));
-  } else if (app === "mail" || app === "people") {
+  } else if (app === "mail" && opens("mail")) {
+    // Emails: the latest received mail in their mailboxes, searched by sender or subject.
+    const r = await findMail(user.id, ws.id, q ? { text: q, limit: 25 } : { limit: 25 }).catch(() => ({ messages: [] as MailHit[] }));
+    const byFrom = q ? await findMail(user.id, ws.id, { from: q, limit: 25 }).catch(() => ({ messages: [] as MailHit[] })) : { messages: [] as MailHit[] };
+    const seen = new Set<string>();
+    items = [...byFrom.messages, ...r.messages]
+      .filter((m) => !seen.has(m.id) && seen.add(m.id))
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 25)
+      .map((m) => ({ id: m.id, label: m.subject || "(no subject)", sub: `${m.from} · ${m.date.slice(0, 10)}${m.attachments.length ? ` · ${m.attachments.length} attachment${m.attachments.length === 1 ? "" : "s"}` : ""}`, url: `/mail?mailbox=${m.mailboxId}&msg=${m.id}`, kind: "item" }));
+  } else if (app === "people") {
     const rows = await db.membership.findMany({
       where: { workspaceId: ws.id, ...(q ? { user: { OR: [{ name: like }, { email: like }] } } : {}) },
       take: 30,
@@ -148,6 +159,14 @@ async function GET_(req: Request) {
     if (path.startsWith("/knowledge") && u.searchParams.get("doc") && opens("read")) {
       const d = await kb.getDoc(await kb.viewer(user.id, ws.id), u.searchParams.get("doc")!);
       return { title: d.title, text: `Knowledge article "${d.title}":\n${d.body.slice(0, 30_000)}` };
+    }
+    // An email in one of their mailboxes: its text, and its attachments (the Builder can take them with read_mail).
+    if (path === "/mail" && u.searchParams.get("msg") && opens("mail")) {
+      const m = await readMail(user.id, ws.id, u.searchParams.get("msg")!);
+      const att = m.attachments.length
+        ? `\nAttachments (email id ${m.id}): ${m.attachments.map((a) => `${a.name} (${a.type}, part ${a.part})`).join("; ")}. In the Builder, take one with read_mail action "attach".`
+        : "";
+      return { title: m.subject || "(no subject)", text: `Email in ${m.mailbox}\nFrom: ${m.from}\nDate: ${m.date}\nSubject: ${m.subject}\n\n${m.body.slice(0, 28_000)}${att}` };
     }
     // A file in Files or in their Google Drive: its text (Word, Excel, PowerPoint and PDF converted).
     const fr = fileRef(path + u.search);
